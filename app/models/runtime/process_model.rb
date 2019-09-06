@@ -157,6 +157,10 @@ module VCAP::CloudController
 
     alias_method :diego?, :diego
 
+    def eirini?
+      space.organization.eirini
+    end
+
     def revisions_enabled?
       app.revisions_enabled
     end

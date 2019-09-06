@@ -3,6 +3,9 @@ module VCAP::CloudController
     class DesireAppHandler
       class << self
         def create_or_update_app(process, client)
+          logger.info("process going through create_or_update is of class #{process.class.name}")
+          logger.info("process going through create_or_update is eirini: #{process.eirini?}")
+
           if (existing_lrp = client.get_app(process))
             client.update_app(process, existing_lrp)
           else

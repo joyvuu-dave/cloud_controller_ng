@@ -36,7 +36,8 @@ module VCAP::CloudController
         end
 
         process.update(revision: process.app.latest_revision) if process.revisions_enabled?
-
+        logger.info("process going through state change is of class #{process.class.name}")
+        logger.info("process going through state change is eirini: #{process.eirini?}")
         @runners.runner_for_process(process).start unless process.needs_staging?
       end
 

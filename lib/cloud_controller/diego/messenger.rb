@@ -25,21 +25,21 @@ module VCAP::CloudController
 
       def send_desire_request(process)
         logger.info('desire.app.begin', app_guid: process.guid)
-        DesireAppHandler.create_or_update_app(process, bbs_apps_client)
+        DesireAppHandler.create_or_update_app(process, bbs_apps_client(process))
       end
 
       def send_stop_index_request(process, index)
         logger.info('stop.index', app_guid: process.guid, index: index)
 
         process_guid = ProcessGuid.from_process(process)
-        bbs_apps_client.stop_index(process_guid, index)
+        bbs_apps_client(process).stop_index(process_guid, index)
       end
 
       def send_stop_app_request(process)
         logger.info('stop.app', app_guid: process.guid)
 
         process_guid = ProcessGuid.from_process(process)
-        bbs_apps_client.stop_app(process_guid)
+        bbs_apps_client(process).stop_app(process_guid)
       end
 
       private
@@ -52,8 +52,12 @@ module VCAP::CloudController
         @protocol ||= Protocol.new
       end
 
-      def bbs_apps_client
-        CloudController::DependencyLocator.instance.bbs_apps_client
+      def bbs_apps_client(process)
+        if process.eirini?
+          CloudController::DependencyLocator.instance.bbs_apps_client
+        else
+          CloudController::DependencyLocator.instance.opi_apps_client
+        end
       end
 
       def bbs_stager_client

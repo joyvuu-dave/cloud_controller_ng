@@ -1496,6 +1496,28 @@ module VCAP::CloudController
       end
     end
 
+    describe 'eirini' do
+      context 'process is in an eirini org' do
+        subject(:process) { ProcessModelFactory.make }
+
+        before do
+          process.space.organization.update(eirini: true)
+        end
+
+        it 'returns true' do
+          expect(process.eirini?).to be_truthy
+        end
+      end
+
+      context 'process is not in an eirini org' do
+        subject(:process) { ProcessModelFactory.make }
+
+        it 'returns false' do
+          expect(process.eirini?).to be_falsey
+        end
+      end
+    end
+
     describe 'diego' do
       subject(:process) { ProcessModelFactory.make }
 
