@@ -12,7 +12,15 @@ module OPI
     def desire_app(process)
       process_guid = process_guid(process)
       path = "/apps/#{process_guid}"
-      client.put(path, body: desire_body(process))
+
+      if process.placement_binding.present?
+        process.placement.placement_splits.each do |split|
+          client_for(split.cluster).put(path, body: desire_body(process, split))
+          logger.info("desired through client_for(cluster)!")
+        end
+      else
+        client.put(path, body: desire_body(process))
+      end
     end
 
     def fetch_scheduling_infos
@@ -60,7 +68,8 @@ module OPI
       client.put(path)
     end
 
-    def bump_freshness; end
+    def bump_freshness;
+    end
 
     private
 
@@ -112,7 +121,7 @@ module OPI
       end
     end
 
-    def desire_body(process)
+    def desire_body(process, split=nil)
       timeout_ms = (process.health_check_timeout || 0) * 1000
       cpu_weight = VCAP::CloudController::Diego::TaskCpuWeightCalculator.new(memory_in_mb: process.memory).calculate
       lifecycle = lifecycle_for(process)
@@ -120,6 +129,7 @@ module OPI
         guid: process.guid,
         version: process.version,
         process_guid: process_guid(process),
+<<<<<<< HEAD
         process_type: process.type,
         app_guid: process.app.guid,
         app_name: process.app.name,
@@ -131,6 +141,7 @@ module OPI
         egress_rules: VCAP::CloudController::Diego::EgressRules.new.running_protobuf_rules(process),
         placement_tags: Array(VCAP::CloudController::IsolationSegmentSelector.for_space(process.space)),
         instances: process.desired_instances,
+        instances: calculate_instances(process, split),
         memory_mb: process.memory,
         disk_mb: process.disk_quota,
         cpu_weight: cpu_weight,
@@ -151,6 +162,12 @@ module OPI
       process.health_check_timeout || config.get(:default_health_check_timeout)
     end
 
+    def calculate_instances(process, split)
+      return process.desired_instances if split.nil?
+
+      int((process.desired_instances * split.weight / process.placement.total_weight.to_f).ceil)
+    end
+    
     def update_body(process)
       body = {
         guid: process.guid,
@@ -179,8 +196,8 @@ module OPI
     def environment_variables(process)
       initial_env = ::VCAP::CloudController::EnvironmentVariableGroup.running.environment_json
       opi_env = initial_env.merge(process.environment_json || {}).
-                merge('VCAP_APPLICATION' => vcap_application(process), 'MEMORY_LIMIT' => "#{process.memory}m").
-                merge(SystemEnvPresenter.new(process.service_bindings).system_env)
+        merge('VCAP_APPLICATION' => vcap_application(process), 'MEMORY_LIMIT' => "#{process.memory}m").
+        merge(SystemEnvPresenter.new(process.service_bindings).system_env)
 
       opi_env = opi_env.merge(DATABASE_URL: process.database_uri) if process.database_uri
       opi_env.merge(port_environment_variables(process))

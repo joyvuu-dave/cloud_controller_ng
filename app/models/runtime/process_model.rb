@@ -32,6 +32,16 @@ module VCAP::CloudController
     DEFAULT_HTTP_PORT     = 8080
     DEFAULT_PORTS         = [DEFAULT_HTTP_PORT].freeze
 
+    many_to_one :placement_binding,
+      class: 'VCAP::CloudController::PlacementBindingModel',
+      primary_key: :guid,
+      key: :placement_binding_guid,
+      without_guid_generation: true
+    one_through_one :placement,
+      join_table: PlacementBinding.table_name,
+      left_primary_key: :process_guid, left_key: :guid,
+      right_primary_key: :guid, right_key: :placement_guid
+
     many_to_one :app, class: 'VCAP::CloudController::AppModel', key: :app_guid, primary_key: :guid, without_guid_generation: true
     many_to_one :revision, class: 'VCAP::CloudController::RevisionModel', key: :revision_guid, primary_key: :guid, without_guid_generation: true
     one_to_many :service_bindings, key: :app_guid, primary_key: :app_guid, without_guid_generation: true
