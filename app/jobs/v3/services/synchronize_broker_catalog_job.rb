@@ -43,6 +43,7 @@ module VCAP::CloudController
           @service_event_repository = VCAP::CloudController::Repositories::ServiceEventRepository::WithBrokerActor.new
           @client_manager = VCAP::Services::SSO::DashboardClientManager.new(broker, service_event_repository)
           @service_manager = VCAP::Services::ServiceBrokers::ServiceManager.new(service_event_repository)
+          @warnings = []
         end
 
         def perform
@@ -59,8 +60,16 @@ module VCAP::CloudController
 
           service_manager.sync_services_and_plans(catalog)
 
+          service_manager.warnings.each do |warning|
+            warnings << { detail: warning }
+          end
+
+          client_manager.warnings.each do |warning|
+            warnings << { detail: warning }
+          end
+
           available_state
-          collect_warnings
+          warnings
         rescue
           failed_state
           raise
@@ -96,10 +105,6 @@ module VCAP::CloudController
         def fail_with_incompatible_catalog(errors)
           full_message = formatter.format(errors)
           raise CloudController::Errors::ApiError.new_from_details('ServiceBrokerCatalogIncompatible', full_message)
-        end
-
-        def collect_warnings
-          (service_manager.warnings + client_manager.warnings).map { |w| { detail: w } }
         end
       end
     end
