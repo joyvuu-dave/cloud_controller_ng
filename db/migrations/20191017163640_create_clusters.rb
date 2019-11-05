@@ -32,7 +32,7 @@ Sequel.migration do
       String :cluster_guid, size: 255, null: false
       Integer :weight, default: 1
 
-      foreign_key [:placement_guid], :placements, key: :guid, name: :placements_bindings_placement_guid_fkey
+      foreign_key [:placement_guid], :placements, key: :guid, name: :placements_splits_placement_guid_fkey
       foreign_key [:cluster_guid], :clusters, key: :guid, name: :placements_cluster_guid_fkey
     end
 
