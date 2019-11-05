@@ -1,5 +1,3 @@
-require 'cloud_controller/opi/base_client'
-
 module VCAP::CloudController
   class ClusterModel < Sequel::Model(:clusters)
     many_to_one :space,

@@ -38,7 +38,7 @@ module VCAP::CloudController
       key: :placement_binding_guid,
       without_guid_generation: true
     one_through_one :placement,
-      join_table: PlacementBinding.table_name,
+      join_table: 'placements',
       left_primary_key: :process_guid, left_key: :guid,
       right_primary_key: :guid, right_key: :placement_guid
 

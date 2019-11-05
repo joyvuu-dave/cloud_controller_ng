@@ -13,9 +13,9 @@ module VCAP::CloudController
       without_guid_generation: true
 
     def total_weight
-      placement_splits.inject(0, { |sum, split|
+      placement_splits.inject(0) do |sum, split|
         sum + split.weight
-      })
+      end
     end
   end
 end

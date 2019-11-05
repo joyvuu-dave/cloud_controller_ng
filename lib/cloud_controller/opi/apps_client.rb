@@ -129,7 +129,6 @@ module OPI
         guid: process.guid,
         version: process.version,
         process_guid: process_guid(process),
-<<<<<<< HEAD
         process_type: process.type,
         app_guid: process.app.guid,
         app_name: process.app.name,
@@ -140,7 +139,6 @@ module OPI
         environment: hash_values_to_s(environment_variables(process)),
         egress_rules: VCAP::CloudController::Diego::EgressRules.new.running_protobuf_rules(process),
         placement_tags: Array(VCAP::CloudController::IsolationSegmentSelector.for_space(process.space)),
-        instances: process.desired_instances,
         instances: calculate_instances(process, split),
         memory_mb: process.memory,
         disk_mb: process.disk_quota,
