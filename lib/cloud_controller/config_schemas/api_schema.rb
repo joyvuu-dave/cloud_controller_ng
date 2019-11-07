@@ -349,7 +349,16 @@ module VCAP::CloudController
           max_annotations_per_resource: Integer,
 
           internal_route_vip_range: String,
-          }
+
+          optional(:kubernetes) => {
+            host_url: String,
+            service_account: {
+              name: String
+            },
+            token: String,
+            node_ca: String,
+          },
+        }
       end
       # rubocop:enable Metrics/BlockLength
 
