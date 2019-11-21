@@ -22,6 +22,7 @@ module VCAP::CloudController::Presenters::V3
         created_at: domain.created_at,
         updated_at: domain.updated_at,
         name: domain.name,
+        global_default: domain.global_default,
         internal: domain.internal,
         metadata: {
           labels: hashified_labels(domain.labels),

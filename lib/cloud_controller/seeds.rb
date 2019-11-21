@@ -13,6 +13,7 @@ module VCAP::CloudController
         create_seed_environment_variable_groups
         create_seed_shared_isolation_segment(config)
         seed_encryption_key_sentinels(config)
+        set_global_default_domain
       end
 
       def create_seed_shared_isolation_segment(config)
@@ -197,6 +198,10 @@ module VCAP::CloudController
             encryption_iterations: Encryptor::ENCRYPTION_ITERATIONS,
           )
         end
+      end
+
+      def set_global_default_domain
+        SharedDomain.where(internal: false, router_group_guid: nil).first&.update(global_default: true)
       end
 
       private
