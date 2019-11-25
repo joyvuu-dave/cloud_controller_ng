@@ -128,6 +128,8 @@ module VCAP::CloudController::Validators
       data_message = {
         VCAP::CloudController::Lifecycles::BUILDPACK => VCAP::CloudController::BuildpackLifecycleDataMessage,
         VCAP::CloudController::Lifecycles::DOCKER => VCAP::CloudController::DockerLifecycleDataMessage,
+        #TODO: Replace the empty docker lifecycle data message with a kpack message
+        VCAP::CloudController::Lifecycles::KPACK => VCAP::CloudController::DockerLifecycleDataMessage,
       }
 
       lifecycle_data_message_class = data_message[record.lifecycle_type]

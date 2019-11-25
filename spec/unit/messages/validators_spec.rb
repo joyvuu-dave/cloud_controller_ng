@@ -361,6 +361,14 @@ module VCAP::CloudController::Validators
           end
         end
       end
+
+      context 'when lifecycle type provided is kpack' do
+        it 'correctly adds the buildpack data message validation errors' do
+          message = lifecycle_class.new({ lifecycle: { type: 'kpack', data: {  } } })
+
+          expect(message).to be_valid
+        end
+      end
     end
 
     describe 'RelationshipValidator' do

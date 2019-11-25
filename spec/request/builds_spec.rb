@@ -128,6 +128,31 @@ RSpec.describe 'Builds' do
       })
     end
 
+    context 'kpack lifecycle' do
+      let(:kpack_request) do
+        {
+          lifecycle: {
+            type: 'kpack',
+            data: {
+            },
+          },
+          package: {
+            guid: package.guid
+          }
+        }
+
+      end
+
+      it 'succeeds' do
+        post 'v3/builds', kpack_request.to_json, developer_headers
+
+        expect(last_response.status).to(eq(201), last_response.body)
+        expect(parsed_response['lifecycle']["type"]).to eq 'kpack'
+        expect(parsed_response['state']).to eq 'STAGING'
+      end
+
+    end
+
     context 'telemetry' do
       it 'should log the required fields when the build is created' do
         Timecop.freeze do

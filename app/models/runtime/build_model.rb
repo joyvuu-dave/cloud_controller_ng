@@ -49,6 +49,7 @@ module VCAP::CloudController
 
     def lifecycle_type
       return BuildpackLifecycleDataModel::LIFECYCLE_TYPE if buildpack_lifecycle_data
+      return Lifecycles::KPACK if kpack_lifecycle_data
 
       DockerLifecycleDataModel::LIFECYCLE_TYPE
     end
