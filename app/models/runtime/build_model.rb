@@ -33,6 +33,10 @@ module VCAP::CloudController
       class:       'VCAP::CloudController::BuildpackLifecycleDataModel',
       key:         :build_guid,
       primary_key: :guid
+    one_to_one :kpack_lifecycle_data,
+      class:       'VCAP::CloudController::KpackLifecycleDataModel',
+      key:         :build_guid,
+      primary_key: :guid
 
     one_through_one :space, join_table: AppModel.table_name, left_key: :guid, left_primary_key: :app_guid, right_primary_key: :guid, right_key: :space_guid
 

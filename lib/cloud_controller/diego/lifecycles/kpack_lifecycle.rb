@@ -11,7 +11,11 @@ module VCAP::CloudController
       Lifecycles::KPACK
     end
 
-    def create_lifecycle_data_model(_); end
+    def create_lifecycle_data_model(build)
+      VCAP::CloudController::KpackLifecycleDataModel.create(
+        build: build,
+      )
+    end
 
     def staging_environment_variables
       {}

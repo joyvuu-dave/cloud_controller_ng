@@ -30,6 +30,10 @@ module VCAP::CloudController
       Diego::Stager.new(@config)
     end
 
+    def stager_for_build(build)
+      Diego::Stager.new(@config)
+    end
+
     private
 
     def using_admin_buildpack?(buildpacks)

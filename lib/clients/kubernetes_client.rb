@@ -1,13 +1,15 @@
 require 'kubeclient'
+require 'uri'
 
 module Clients
   class KubernetesClient
-    class MissingCredentialsError < StandardError; end
+    class Error < StandardError; end
+    class MissingCredentialsError < Error; end
+    class InvalidURIError < Error; end
+    attr_reader :client
 
-    attr_reader :v1_client, :kpack_client, :apps_client
-
-    def initialize(host_url:, service_account:, ca_crt:)
-      if [host_url, service_account, ca_crt].any?(&:blank?)
+    def initialize(api_uri:, version:, service_account:, ca_crt:)
+      if [api_uri, service_account, ca_crt].any?(&:blank?)
         raise MissingCredentialsError.new('Missing credentials for Kubernetes')
       end
 
@@ -17,21 +19,9 @@ module Clients
       ssl_options = {
         ca: ca_crt
       }
-      @v1_client = Kubeclient::Client.new(
-        host_url,
-        'v1',
-        auth_options: auth_options,
-        ssl_options:  ssl_options
-      )
-      @kpack_client = Kubeclient::Client.new(
-        "#{host_url}/apis/build.pivotal.io",
-        'v1alpha1',
-        auth_options: auth_options,
-        ssl_options:  ssl_options
-      )
-      @apps_client = Kubeclient::Client.new(
-        "#{host_url}/apis/apps",
-        'v1',
+      @client = Kubeclient::Client.new(
+        "https://#{api_uri}",
+        version,
         auth_options: auth_options,
         ssl_options:  ssl_options
       )

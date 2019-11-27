@@ -1,11 +1,10 @@
 require 'spec_helper'
-require 'clients/kubernetes_client'
+require 'clients/kubernetes_kpack_client'
 
-RSpec.describe Clients::KubernetesClient do
+RSpec.describe Clients::KubernetesKpackClient do
   let(:kubernetes_creds) do
     {
-      api_uri: 'my.kubernetes.io/apis/whatever',
-      version: 'v1',
+      hostname: 'my.kubernetes.io',
       service_account: {
         name: 'username',
         token: 'token',
@@ -15,7 +14,7 @@ RSpec.describe Clients::KubernetesClient do
   end
 
   it 'loads kubernetes creds from the config' do
-    client = Clients::KubernetesClient.new(kubernetes_creds).client
+    client = Clients::KubernetesKpackClient.new(kubernetes_creds).client
 
     expect(client.ssl_options).to eq({
       ca: 'k8s_node_ca'
@@ -25,24 +24,23 @@ RSpec.describe Clients::KubernetesClient do
       bearer_token: 'token'
     })
 
-    expect(client.api_endpoint.to_s).to eq 'https://my.kubernetes.io/apis/whatever'
-end
+    expect(client.api_endpoint.to_s).to eq 'https://my.kubernetes.io/apis/build.pivotal.io'
+  end
 
-  context 'when credentials are missing' do
+  context 'when hostname is missing' do
     let(:kubernetes_creds) {
       {
-        api_uri: 'my.kubernetes.io/api',
-        version: 'v1',
+        hostname: '',
         service_account: {
           name: 'username',
           token: 'token',
         },
-        ca_crt: nil
+        ca_crt: 'some-cert'
       }
     }
 
     it 'raises an error' do
-      expect { Clients::KubernetesClient.new(kubernetes_creds) }.to raise_error(Clients::KubernetesClient::MissingCredentialsError)
+      expect { Clients::KubernetesKpackClient.new(kubernetes_creds) }.to raise_error(Clients::KubernetesClient::InvalidURIError)
     end
   end
 end

@@ -74,7 +74,7 @@ module VCAP::CloudController
 
       logger.info("build created: #{build.guid}")
       logger.info("staging package: #{package.inspect} for build #{build.guid}")
-      @staging_response = stagers.stager_for_app.stage(staging_details)
+      @staging_response = stagers.stager_for_build(build).stage(staging_details)
       logger.info("package staging requested: #{package.inspect}")
 
       build
@@ -153,6 +153,10 @@ module VCAP::CloudController
 
     def stagers
       CloudController::DependencyLocator.instance.stagers
+    end
+
+    def kpack_client
+      CloudController::DependencyLocator.instance.kpack_client.client
     end
 
     def staging_in_progress!
