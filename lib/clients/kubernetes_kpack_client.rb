@@ -4,6 +4,7 @@ module Clients
   class KubernetesKpackClient
     attr_reader :client
 
+    # TODO: fix BOSH release to take hostname instead of api uri
     def initialize(hostname:, service_account:, ca_crt:)
       raise KubernetesClient::InvalidURIError if hostname.empty?
 
@@ -13,6 +14,10 @@ module Clients
         service_account: service_account,
         ca_crt: ca_crt,
       ).client
+    end
+
+    def create_build(*args)
+      client.create_build(*args)
     end
   end
 end

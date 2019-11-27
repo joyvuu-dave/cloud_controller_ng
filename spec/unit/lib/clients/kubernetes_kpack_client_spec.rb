@@ -15,7 +15,6 @@ RSpec.describe Clients::KubernetesKpackClient do
 
   it 'loads kubernetes creds from the config' do
     client = Clients::KubernetesKpackClient.new(kubernetes_creds).client
-
     expect(client.ssl_options).to eq({
       ca: 'k8s_node_ca'
     })

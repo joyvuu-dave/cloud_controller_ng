@@ -1,5 +1,6 @@
 require 'cloud_controller/diego'
 require 'cloud_controller/diego/stager'
+require 'cloud_controller/kpack/stager'
 require 'cloud_controller/diego/buildpack/staging_completion_handler'
 require 'cloud_controller/diego/buildpack/lifecycle_protocol'
 require 'cloud_controller/diego/docker/lifecycle_protocol'
@@ -31,6 +32,7 @@ module VCAP::CloudController
     end
 
     def stager_for_build(build)
+      return Kpack::Stager.new if build.kpack_lifecycle?
       Diego::Stager.new(@config)
     end
 
