@@ -9,10 +9,17 @@ module Kpack
     let(:environment_variables) {{'nightshade_vegetable' => 'potato'}}
     let(:staging_memory_in_mb) {1024}
     let(:staging_disk_in_mb) {1024}
+    let(:blobstore_url_generator) do
+      instance_double(::CloudController::Blobstore::UrlGenerator,
+        package_download_url: 'package-download-url',
+      )
+    end
     let(:client) { instance_double(Clients::KubernetesKpackClient) }
     before do
       allow(CloudController::DependencyLocator.instance).to receive(:kpack_client).and_return(client)
+      allow(CloudController::DependencyLocator.instance).to receive(:blobstore_url_generator).and_return(blobstore_url_generator)
     end
+
 
     it_behaves_like 'a stager'
 

@@ -4,7 +4,7 @@ require 'clients/kubernetes_kpack_client'
 RSpec.describe Clients::KubernetesKpackClient do
   let(:kubernetes_creds) do
     {
-      hostname: 'my.kubernetes.io',
+      host_url: 'https://my.kubernetes.io',
       service_account: {
         name: 'username',
         token: 'token',
@@ -29,7 +29,7 @@ RSpec.describe Clients::KubernetesKpackClient do
   context 'when hostname is missing' do
     let(:kubernetes_creds) {
       {
-        hostname: '',
+        host_url: '',
         service_account: {
           name: 'username',
           token: 'token',

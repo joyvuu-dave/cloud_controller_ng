@@ -714,7 +714,7 @@ RSpec.describe CloudController::DependencyLocator do
 
       TestConfig.override({
         kubernetes: {
-          hostname: 'my.kubernetes.io',
+          host_url: 'https://my.kubernetes.io',
           service_account: {
             name: 'username',
             token: 'token',

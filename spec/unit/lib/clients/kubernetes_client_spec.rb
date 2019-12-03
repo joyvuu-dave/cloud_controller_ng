@@ -4,7 +4,7 @@ require 'clients/kubernetes_client'
 RSpec.describe Clients::KubernetesClient do
   let(:kubernetes_creds) do
     {
-      api_uri: 'my.kubernetes.io/apis/whatever',
+      api_group_url: 'https://my.kubernetes.io/apis/whatever',
       version: 'v1',
       service_account: {
         name: 'username',
@@ -31,7 +31,7 @@ end
   context 'when credentials are missing' do
     let(:kubernetes_creds) {
       {
-        api_uri: 'my.kubernetes.io/api',
+        api_group_url: 'https://my.kubernetes.io/api',
         version: 'v1',
         service_account: {
           name: 'username',

@@ -370,7 +370,7 @@ module CloudController
     def kpack_client
       kubernetes_creds = VCAP::CloudController::Config.config.get(:kubernetes)
       @dependencies[:kpack_client] ||= Clients::KubernetesKpackClient.new(
-        hostname: kubernetes_creds[:hostname],
+        host_url: kubernetes_creds[:host_url],
         service_account: kubernetes_creds[:service_account],
         ca_crt: File.open(kubernetes_creds[:ca_file]).read
       )

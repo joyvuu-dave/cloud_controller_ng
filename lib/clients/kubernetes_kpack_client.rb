@@ -4,12 +4,11 @@ module Clients
   class KubernetesKpackClient
     attr_reader :client
 
-    # TODO: fix BOSH release to take hostname instead of api uri
-    def initialize(hostname:, service_account:, ca_crt:)
-      raise KubernetesClient::InvalidURIError if hostname.empty?
+    def initialize(host_url:, service_account:, ca_crt:)
+      raise KubernetesClient::InvalidURIError if host_url.empty?
 
       @client = KubernetesClient.new(
-        api_uri: "#{hostname}/apis/build.pivotal.io",
+        api_group_url: "#{host_url}/apis/build.pivotal.io",
         version: 'v1alpha1',
         service_account: service_account,
         ca_crt: ca_crt,

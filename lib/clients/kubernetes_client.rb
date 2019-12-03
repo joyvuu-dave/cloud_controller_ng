@@ -8,8 +8,8 @@ module Clients
     class InvalidURIError < Error; end
     attr_reader :client
 
-    def initialize(api_uri:, version:, service_account:, ca_crt:)
-      if [api_uri, service_account, ca_crt].any?(&:blank?)
+    def initialize(api_group_url:, version:, service_account:, ca_crt:)
+      if [api_group_url, service_account, ca_crt].any?(&:blank?)
         raise MissingCredentialsError.new('Missing credentials for Kubernetes')
       end
 
@@ -20,7 +20,7 @@ module Clients
         ca: ca_crt
       }
       @client = Kubeclient::Client.new(
-        "https://#{api_uri}",
+        "#{api_group_url}",
         version,
         auth_options: auth_options,
         ssl_options:  ssl_options
