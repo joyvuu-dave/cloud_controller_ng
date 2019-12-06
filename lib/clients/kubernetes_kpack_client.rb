@@ -15,8 +15,8 @@ module Clients
       ).client
     end
 
-    def create_build(*args)
-      client.create_build(*args)
+    def create_image(*args)
+      client.create_image(*args)
     end
   end
 end

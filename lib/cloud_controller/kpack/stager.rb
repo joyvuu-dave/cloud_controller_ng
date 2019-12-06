@@ -1,23 +1,32 @@
 
 module Kpack
   class Stager
+    def initialize(builder_namespace:, registry_service_account_name:, registry_tag_base:)
+      @builder_namespace = builder_namespace
+      @registry_service_account_name = registry_service_account_name
+      @registry_tag_base = registry_tag_base
+    end
+
     def stage(staging_details)
-      build = Kubeclient::Resource.new
-      build.metadata = {
-        name: staging_details.staging_guid,
-        namespace: 'cf-workloads',
+      image = Kubeclient::Resource.new
+      image.metadata = {
+        name: staging_details.package.guid,
+        namespace: @builder_namespace,
       }
-      build.spec = {
+      image.spec = {
+        serviceAccount: @registry_service_account_name,
         builder: {
-          image: 'cloudfoundry/cnb:bionic'
+          name: 'capi-builder',
+          kind: 'Builder'
         },
+        tag: "#{@registry_tag_base}/#{staging_details.package.guid}",
         source: {
           blob: {
             url: blobstore_url_generator.package_download_url(staging_details.package),
-          },
-        },
+          }
+        }
       }
-      client.create_build(build)
+      client.create_image(image)
     end
 
     def stop_stage
@@ -29,6 +38,8 @@ module Kpack
     end
 
     private
+
+    attr_reader :kube_namespace, :registry_service_account_name, :registry_tag_base
 
     def build_resource(staging_details)
       Kubeclient::Resource.new

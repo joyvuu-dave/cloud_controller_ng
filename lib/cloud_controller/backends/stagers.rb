@@ -32,7 +32,10 @@ module VCAP::CloudController
     end
 
     def stager_for_build(build)
-      return Kpack::Stager.new if build.kpack_lifecycle?
+      if build.kpack_lifecycle?
+        return Kpack::Stager.new(**@config.get(:kubernetes, :kpack))
+      end
+
       Diego::Stager.new(@config)
     end
 

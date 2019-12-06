@@ -4,11 +4,15 @@ require 'clients/kubernetes_kpack_client'
 
 module Kpack
   RSpec.describe Stager do
-    subject(:stager) {Stager.new}
-    let(:package) {VCAP::CloudController::PackageModel.make}
-    let(:environment_variables) {{'nightshade_vegetable' => 'potato'}}
-    let(:staging_memory_in_mb) {1024}
-    let(:staging_disk_in_mb) {1024}
+    subject(:stager) { Stager.new(
+      builder_namespace: 'namespace',
+      registry_service_account_name: 'gcr-service-account',
+      registry_tag_base: 'gcr.io/capi-images'
+    ) }
+    let(:package) { VCAP::CloudController::PackageModel.make }
+    let(:environment_variables) { {'nightshade_vegetable' => 'potato'} }
+    let(:staging_memory_in_mb) { 1024 }
+    let(:staging_disk_in_mb) { 1024 }
     let(:blobstore_url_generator) do
       instance_double(::CloudController::Blobstore::UrlGenerator,
         package_download_url: 'package-download-url',
@@ -37,11 +41,31 @@ module Kpack
       let(:lifecycle) do
         VCAP::CloudController::KpackLifecycle.new(package, {})
       end
-      let(:build) {VCAP::CloudController::BuildModel.make(:kpack)}
+      let(:build) { VCAP::CloudController::BuildModel.make(:kpack) }
 
       it 'creates a build using the kpack client' do
-        expect(client).to receive(:create_build)
+        expect(client).to receive(:create_image).with(Kubeclient::Resource::new({
+          metadata: {
+            name: package.guid,
+            namespace: 'namespace',
+          },
+          spec: {
+            tag: "gcr.io/capi-images/#{package.guid}",
+            serviceAccount: 'gcr-service-account',
+            builder: {
+              name: 'capi-builder',
+              kind: 'Builder'
+            },
+            source: {
+              blob: {
+                url: 'package-download-url',
+              }
+            }
+          }
+        }))
+
         stager.stage(staging_details)
+        expect(blobstore_url_generator).to have_received(:package_download_url).with(package)
       end
     end
   end
