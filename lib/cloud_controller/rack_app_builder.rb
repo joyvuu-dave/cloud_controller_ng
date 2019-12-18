@@ -45,6 +45,10 @@ module VCAP::CloudController
           run Rails.application.app
         end
 
+        map '/internal' do
+          run Rails.application.app
+        end
+
         map '/healthz' do
           run lambda { |_| [200, { 'Content-Type' => 'application/json' }, ['OK']] }
         end

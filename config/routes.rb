@@ -245,4 +245,10 @@ Rails.application.routes.draw do
 
   # info
   get '/info', to: 'info#show'
+
+  # TODO: We need to figure out how to properly namespace this or merge with public API
+  namespace :internal do
+    patch '/builds/:guid', to: 'builds#update'
+  end
+
 end
