@@ -108,7 +108,7 @@ module VCAP::CloudController
     def stopped?
       desired_state == ProcessModel::STOPPED
     end
-
+    
     def deploying?
       deployments.any?(&:deploying?)
     end
