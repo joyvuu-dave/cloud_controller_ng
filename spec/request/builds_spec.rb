@@ -466,5 +466,27 @@ RSpec.describe 'Builds' do
       parsed_response = MultiJson.load(last_response.body)
       expect(parsed_response['metadata']).to eq(expected_metadata)
     end
+
+    context 'updating state' do
+      context 'when the cloud_controller.admin scope is present' do
+        it 'updates the state' do
+          patch "/v3/builds/#{build_model.guid}", { state: 'STAGED' }.to_json, admin_headers
+          expect(last_response.status).to eq(200), last_response.body
+        end
+      end
+
+      context 'when the cloud_controller.update_build_state scope is present' do
+        it 'updates the state' do
+
+        end
+      end
+
+      context 'when insufficiently authorized' do
+        it '403s' do
+          patch "/v3/builds/#{build_model.guid}", { state: 'STAGED' }.to_json, developer_headers
+          expect(last_response.status).to eq(403), last_response.body
+        end
+      end
+    end
   end
 end

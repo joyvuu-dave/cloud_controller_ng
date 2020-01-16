@@ -1,4 +1,3 @@
-require 'messages/internal_build_update_message'
 
 class Internal::BuildsController < ApplicationController
   def update
@@ -7,7 +6,7 @@ class Internal::BuildsController < ApplicationController
     build = BuildModel.find(guid: params[:guid])
     resource_not_found!(:build) unless build
 
-    message = VCAP::CloudController::InternalBuildUpdateMessage.new(hashed_params[:body])
+    message = VCAP::CloudController::BuildUpdateMessage.new(hashed_params[:body])
     unprocessable!(message.errors.full_messages) unless message.valid?
 
     if message.state == VCAP::CloudController::BuildModel::FAILED_STATE

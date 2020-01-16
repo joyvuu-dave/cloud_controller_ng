@@ -80,8 +80,11 @@ class BuildsController < ApplicationController
     space = build.package.space
     build_not_found! unless permission_queryer.can_read_from_space?(space.guid, space.organization.guid)
     unauthorized! unless permission_queryer.can_write_to_space?(space.guid)
-
+    # Catch 22: do we do this before the space_developer permission check?
     message = VCAP::CloudController::BuildUpdateMessage.new(hashed_params[:body])
+    unauthorized! if message.state.present? && !permission_queryer.can_update_build_state?
+
+
     unprocessable!(message.errors.full_messages) unless message.valid?
 
     build = BuildUpdate.new.update(build, message)
