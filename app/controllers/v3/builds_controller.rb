@@ -16,7 +16,7 @@ class BuildsController < ApplicationController
                 build_list_fetcher.fetch_all(eager_loaded_associations: Presenters::V3::BuildPresenter.associated_resources)
               else
                 build_list_fetcher.fetch_for_spaces(space_guids: permission_queryer.readable_space_guids,
-                                                    eager_loaded_associations: Presenters::V3::BuildPresenter.associated_resources)
+                  eager_loaded_associations: Presenters::V3::BuildPresenter.associated_resources)
               end
 
     render status: :ok, json: Presenters::V3::PaginatedListPresenter.new(
@@ -75,19 +75,25 @@ class BuildsController < ApplicationController
 
   def update
     build = BuildModel.find(guid: hashed_params[:guid])
-
     build_not_found! unless build
-    space = build.package.space
-    build_not_found! unless permission_queryer.can_read_from_space?(space.guid, space.organization.guid)
-    unauthorized! unless permission_queryer.can_write_to_space?(space.guid)
-    # Catch 22: do we do this before the space_developer permission check?
-    message = VCAP::CloudController::BuildUpdateMessage.new(hashed_params[:body])
-    unauthorized! if message.state.present? && !permission_queryer.can_update_build_state?
 
+    if hashed_params[:body].key?(:state)
+      unauthorized! unless permission_queryer.can_update_build_state?
 
-    unprocessable!(message.errors.full_messages) unless message.valid?
+      message = VCAP::CloudController::BuildUpdateMessage.new(hashed_params[:body])
+      unprocessable!(message.errors.full_messages) unless message.valid?
 
-    build = BuildUpdate.new.update(build, message)
+      build = update_build_state(build, message)
+    else
+      space = build.package.space
+      build_not_found! unless permission_queryer.can_read_from_space?(space.guid, space.organization.guid)
+      unauthorized! unless permission_queryer.can_write_to_space?(space.guid)
+
+      message = VCAP::CloudController::BuildUpdateMessage.new(hashed_params[:body])
+      unprocessable!(message.errors.full_messages) unless message.valid?
+
+      build = BuildUpdate.new.update(build, message)
+    end
 
     render status: :ok, json: Presenters::V3::BuildPresenter.new(build)
   end
@@ -101,6 +107,17 @@ class BuildsController < ApplicationController
   end
 
   private
+
+  def update_build_state(build, message)
+    build = if message.state == VCAP::CloudController::BuildModel::FAILED_STATE
+              build.fail_to_stage!('StagerError', message.error)
+            else
+              build.mark_as_staged
+              build.save_changes
+            end
+
+    build
+  end
 
   def build_not_found!
     resource_not_found!(:build)

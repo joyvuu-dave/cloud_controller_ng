@@ -3,8 +3,6 @@ require 'messages/build_update_message'
 
 module VCAP::CloudController
   RSpec.describe BuildUpdateMessage do
-
-
     describe 'validations' do
       context 'metadata' do
         let(:body) do
@@ -34,7 +32,7 @@ module VCAP::CloudController
         end
 
         it 'complains about bogus metadata fields' do
-          newbody = body.merge({"metadata": {"choppers": 3}})
+          newbody = body.merge({ "metadata": { "choppers": 3 } })
           message = BuildUpdateMessage.new(newbody)
 
           expect(message).not_to be_valid
@@ -112,7 +110,7 @@ module VCAP::CloudController
         end
 
         it 'complains about bogus metadata fields' do
-          newbody = body.merge({"metadata": {"choppers": 3}})
+          newbody = body.merge({ "metadata": { "choppers": 3 } })
           message = BuildUpdateMessage.new(newbody)
 
           expect(message).not_to be_valid

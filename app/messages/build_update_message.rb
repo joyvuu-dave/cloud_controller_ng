@@ -13,6 +13,7 @@ module VCAP::CloudController
 
     def state_is_in_final_states
       return unless state.present?
+
       unless BuildModel::FINAL_STATES.include?(state)
         errors.add(:state, "'#{state}' is not a valid state")
       end
