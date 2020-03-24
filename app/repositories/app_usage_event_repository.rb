@@ -147,7 +147,7 @@ module VCAP::CloudController
       end
 
       def delete_events_older_than(cutoff_age_in_days)
-        Database::OldRecordCleanup.new(AppUsageEvent, cutoff_age_in_days, keep_at_least_one_record: true).delete
+        Database::OldRecordCleanup.new(AppUsageEvent, cutoff_age_in_days, keep_at_least_one_day_of_records: true).delete
       end
 
       private
