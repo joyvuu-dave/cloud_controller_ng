@@ -190,6 +190,8 @@ module VCAP::CloudController
         event = ServiceUsageEvent.last
         expect(event.state).to eq(Repositories::ServiceUsageEventRepository::DELETED_EVENT_STATE)
         expect(event).to match_service_instance(service_instance)
+
+        expect(ServiceInstanceUsage.length).to > 1
       end
     end
 

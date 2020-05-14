@@ -215,6 +215,9 @@ Rails.application.routes.draw do
   patch '/service_instances/:guid', to: 'service_instances_v3#update'
   delete '/service_instances/:service_instance_guid/relationships/shared_spaces/:space_guid', to: 'service_instances_v3#unshare_service_instance'
 
+  # service_instance_usages
+  get '/service_instance_usages', to: 'service_instance_usages#index'
+
   # space_features
   get '/spaces/:guid/features/:name', to: 'space_features#show'
   get '/spaces/:guid/features', to: 'space_features#index'
