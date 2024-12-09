@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Clean up existing PID file if it exists
+if [ -f /tmp/cloud_controller.pid ]; then
+    rm /tmp/cloud_controller.pid
+fi
+
+# Find and kill any process using port 3000
+if lsof -i :3000 > /dev/null; then
+    echo "Port 3000 is in use. Attempting to free it..."
+    lsof -ti :3000 | xargs kill -9
+fi
+
+export DB_CONNECTION_STRING=mysql2://root:supersecret@127.0.0.1:3306/ccdb
+export RACK_ENV=development
+export RAILS_ENV=development
+
+# Force TTY allocation for debugger
+bundle exec rerun --force-polling --clear --no-notify --pattern '{app,config,lib}/**/*.{rb,yml,yaml}' -- ./bin/cloud_controller -c ./tmp/cloud_controller.yml
