@@ -97,6 +97,7 @@ group :development do
   gem 'byebug'
   gem 'debug', '~> 1.9'
   gem 'listen'
+  gem 'rerun', '~> 0.14.0'
   gem 'roodi'
   gem 'solargraph'
   gem 'spork', git: 'https://github.com/sporkrb/spork', ref: '224df49' # '~> 1.0rc'
