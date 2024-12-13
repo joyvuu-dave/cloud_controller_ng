@@ -26,7 +26,7 @@ module VCAP::Services::SSO::UAA
       request['Authorization'] = uaa_client.token_info.auth_header
 
       http             = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl     = true
+      http.use_ssl     = false
       http.verify_mode = OpenSSL::SSL::VERIFY_PEER
       http.ca_file     = uaa_ca_file
       http.cert_store  = OpenSSL::X509::Store.new

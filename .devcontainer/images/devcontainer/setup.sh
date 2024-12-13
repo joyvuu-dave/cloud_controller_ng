@@ -29,15 +29,13 @@ setupRubyGems () {
 
 setupCredhubCli () {
   set -x
-  wget "$(curl -s https://api.github.com/repos/cloudfoundry/credhub-cli/releases/latest |
-  jq -r '.assets[] | select(.name|match("credhub-linux.*")) | .browser_download_url')" -O /tmp/credhub.tar.gz
+  wget "https://github.com/cloudfoundry/credhub-cli/releases/download/2.9.40/credhub-linux-amd64-2.9.40.tg" -O /tmp/credhub.tar.gz
   cd /tmp
   sudo tar -xzf /tmp/credhub.tar.gz && sudo rm -f /tmp/credhub.tar.gz && sudo mv /tmp/credhub /usr/bin
 }
 
 setupYqCli () {
-  sudo wget "$(curl -s https://api.github.com/repos/mikefarah/yq/releases/latest |
-  jq -r '.assets[] | select(.name|match("linux_amd64$")) | .browser_download_url')" -O /usr/bin/yq
+  sudo wget "https://github.com/mikefarah/yq/releases/download/v4.44.6/yq_linux_amd64" -O /usr/bin/yq
   sudo chmod +x /usr/bin/yq
 }
 

@@ -1,14 +1,14 @@
-FROM ruby:3.2-alpine
+FROM tpi-docker-virtual.usw1.packages.broadcom.com/library/ruby:3.2-alpine
 
 RUN apk --no-cache add git make curl jq build-base \
     && git clone https://github.com/cloudfoundry/cf-acceptance-tests \
     --filter=blob:none \
     --depth=1 \
-    -b $(curl -s https://api.github.com/repos/cloudfoundry/cf-acceptance-tests/releases/latest | jq -r '.tag_name') \
+    -b v17.4.0 \
     --single-branch
 
 WORKDIR /cf-acceptance-tests/assets/service_broker
-RUN git checkout $(curl -s https://api.github.com/repos/cloudfoundry/cf-acceptance-tests/releases/latest | jq -r '.tag_name') \
+RUN git checkout v17.4.0 \
     && bundle install
 
 EXPOSE 80
