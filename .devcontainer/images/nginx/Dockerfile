@@ -1,8 +1,8 @@
-FROM alpine
+FROM tpi-docker-virtual.usw1.packages.broadcom.com/library/alpine
 
 RUN apk --no-cache add build-base pcre-dev openssl-dev gzip curl jq zlib-dev \
     && NGINX_VERSION=$(curl -s https://nginx.org/en/download.html | grep -o -E -m 1 "nginx-[0-9]+\.[0-9]+\.[0-9]+" | cut -d'-' -f2 | head -n 1) \
-    && UPLOAD_VERSION=$(curl -s https://api.github.com/repos/fdintino/nginx-upload-module/tags | jq -r '.[0].name') \
+    && UPLOAD_VERSION=2.3.0 \
     && wget -P /tmp https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz && tar -zxvf /tmp/nginx-${NGINX_VERSION}.tar.gz -C /tmp \
     && wget -P /tmp https://github.com/fdintino/nginx-upload-module/archive/${UPLOAD_VERSION}.tar.gz && tar -zxvf /tmp/${UPLOAD_VERSION}.tar.gz -C /tmp \
     && cd /tmp/nginx-${NGINX_VERSION}\
