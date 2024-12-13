@@ -1,7 +1,7 @@
 require 'fetchers/base_list_fetcher'
 
 module VCAP::CloudController
-  class AppUsageConsumerListFetcher < BaseListFetcher
+  class UsageEventConsumerListFetcher < BaseListFetcher
     class << self
       def fetch_all(message, dataset)
         filter(message, dataset)
@@ -17,13 +17,13 @@ module VCAP::CloudController
           dataset = dataset.filter { id > last_event.id }
         end
 
-        super(message, dataset, AppUsageConsumer)
+        super(message, dataset, UsageEventConsumer)
       end
 
       def invalid_after_guid!
         raise CloudController::Errors::ApiError.new_from_details(
           'UnprocessableEntity',
-          'After guid filter must be a valid app usage event guid.'
+          'After guid filter must be a valid usage event guid.'
         )
       end
     end

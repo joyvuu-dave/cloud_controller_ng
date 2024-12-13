@@ -2,20 +2,17 @@ require 'repositories/event_types'
 
 module VCAP::CloudController
   module Repositories
-    class AppUsageConsumerRepository
-      def create(consumer_id:, last_app_usage_event_id:)
-        AppUsageConsumer.create(
-          consumer_id:,
-          last_app_usage_event_id:
+    class UsageEventConsumerRepository
+      def create(consumer_guid:, last_event_guid:, model_name:)
+        UsageEventConsumer.create(
+          consumer_guid:,
+          last_event_guid:,
+          model_name:
         )
       end
 
       def find_by_id(id)
-        AppUsageConsumer.first(id:)
-      end
-
-      def all
-        AppUsageConsumer.all
+        UsageEventConsumer.first(id:)
       end
 
       def update(id, attributes)

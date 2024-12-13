@@ -1,13 +1,13 @@
 module VCAP::CloudController
-  class AppUsageConsumer < Sequel::Model
+  class UsageEventConsumer < Sequel::Model
     plugin :validation_helpers
 
-    many_to_one :last_app_usage_event,
+    many_to_one :last_event,
                 class: 'VCAP::CloudController::AppUsageEvent'
 
     def validate
-      validates_presence %i[consumer_id last_app_usage_event_id]
-      validates_unique :consumer_id
+      validates_presence %i[consumer_guid last_event_guid model_name]
+      validates_unique :consumer_guid
     end
 
     def before_create
@@ -19,6 +19,6 @@ module VCAP::CloudController
       self.guid ||= SecureRandom.uuid
     end
 
-    export_attributes :consumer_id, :last_app_usage_event_id
+    export_attributes :consumer_guid, :last_event_guid, :model_name
   end
 end
