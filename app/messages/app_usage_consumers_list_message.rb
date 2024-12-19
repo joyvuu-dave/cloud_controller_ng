@@ -1,4 +1,5 @@
 require 'messages/list_message'
+require 'messages/validators'
 
 module VCAP::CloudController
   class AppUsageConsumersListMessage < ListMessage
