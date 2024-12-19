@@ -2,7 +2,7 @@ require 'messages/list_message'
 require 'messages/validators'
 
 module VCAP::CloudController
-  class AppUsageConsumersListMessage < ListMessage
+  class ServiceUsageConsumersListMessage < ListMessage
     register_allowed_keys %i[
       consumer_guids
       last_processed_guids

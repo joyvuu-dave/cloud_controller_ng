@@ -2,7 +2,7 @@ require 'messages/metadata_base_message'
 require 'messages/validators'
 
 module VCAP::CloudController
-  class AppUsageConsumerCreateMessage < MetadataBaseMessage
+  class ServiceUsageConsumerCreateMessage < MetadataBaseMessage
     register_allowed_keys %i[consumer_guid last_processed_guid]
 
     validates_with NoAdditionalKeysValidator
