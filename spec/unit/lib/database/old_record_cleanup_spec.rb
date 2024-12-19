@@ -74,7 +74,7 @@ RSpec.describe Database::OldRecordCleanup do
       expect { stale_event2.reload }.to raise_error(Sequel::NoExistingObject)
     end
 
-     # Testing keep_running_records feature
+    # Testing keep_running_records feature
     it 'keeps AppUsageEvent start record when there is no corresponding stop record' do
       record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::AppUsageEvent, 1, keep_at_least_one_record: false, keep_running_records: true,
                                                                                                keep_unprocessed_records: false)
