@@ -55,7 +55,7 @@ module Database
       final_records = old_records.where(state: ending_string).from_self(alias: :final_records)
 
       exists_condition = final_records.where(Sequel[:final_records][guid_symbol] => Sequel[:initial_records][guid_symbol]).where do
-        Sequel[:final_records][:created_at] >= Sequel[:initial_records][:created_at]
+        Sequel[:final_records][:id] > Sequel[:initial_records][:id]
       end.select(1).exists
 
       prunable_initial_records = initial_records.where(exists_condition)
@@ -96,17 +96,19 @@ module Database
       return old_records unless has_registered_consumer?(model)
 
       consumer_model = consumer_model(model)
-
       raise "Invalid consumer model: #{model}" if consumer_model.nil?
 
-      lowest_referenced_event_guid = nil
-      consumer_model.find_each do |consumer|
-        usage_event = model.find_by(guid: consumer_model.last_processed_guid)
-        lowest_referenced_event_guid = usage_event.id if lowest_referenced_event_guid.nil? || usage_event.id < lowest_referenced_event_guid
-      end
+      # Find the minimum ID of any usage event that is referenced by a consumer
+      referenced_event = model.
+                         join(consumer_model.table_name.to_sym, last_processed_guid: :guid).
+                         select(Sequel.function(:min, Sequel.qualify(model.table_name, :id)).as(:min_id)).
+                         first
 
-      old_records
-        .where { id < lowest_referenced_event_guid } 
+      lowest_referenced_event_id = referenced_event&.[](:min_id)
+
+      return old_records if lowest_referenced_event_id.nil?
+
+      old_records.where { id < lowest_referenced_event_id }
     end
 
     def has_registered_consumer?(model)
@@ -116,9 +118,9 @@ module Database
       false
     end
 
-    def usage_event_symbol(model)
-      return :app_usage_events if model == VCAP::CloudController::AppUsageEvent
-      return :service_usage_events if model == VCAP::CloudController::ServiceUsageEvent
+    def consumer_model(model)
+      return VCAP::CloudController::AppUsageConsumer if model == VCAP::CloudController::AppUsageEvent
+      return VCAP::CloudController::ServiceUsageConsumer if model == VCAP::CloudController::ServiceUsageEvent
 
       nil
     end

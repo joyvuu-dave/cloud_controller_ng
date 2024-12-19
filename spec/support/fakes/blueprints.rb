@@ -732,6 +732,16 @@ module VCAP::CloudController
     process_type { 'web' }
   end
 
+  AppUsageConsumer.blueprint do
+    consumer_guid { Sham.guid }
+    last_processed_event { AppUsageEvent.make }
+  end
+
+  ServiceUsageConsumer.blueprint do
+    consumer_guid { Sham.guid }
+    last_processed_event { ServiceUsageEvent.make }
+  end
+
   ServiceUsageEvent.blueprint do
     state { 'CREATED' }
     org_guid { Sham.guid }

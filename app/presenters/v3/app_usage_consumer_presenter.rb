@@ -5,8 +5,8 @@ module VCAP::CloudController::Presenters::V3
     def to_hash
       {
         guid: app_usage_consumer.guid,
-        consumer_id: app_usage_consumer.consumer_id,
-        last_app_usage_event_id: app_usage_consumer.last_app_usage_event_id,
+        consumer_guid: app_usage_consumer.consumer_guid,
+        last_processed_guid: app_usage_consumer.last_processed_guid,
         created_at: app_usage_consumer.created_at,
         updated_at: app_usage_consumer.updated_at,
         links: build_links

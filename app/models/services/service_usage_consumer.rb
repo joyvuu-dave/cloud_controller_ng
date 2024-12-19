@@ -1,9 +1,9 @@
 module VCAP::CloudController
-  class AppUsageConsumer < Sequel::Model
+  class ServiceUsageConsumer < Sequel::Model
     plugin :validation_helpers
 
     many_to_one :last_processed_event,
-                class: 'VCAP::CloudController::AppUsageEvent',
+                class: 'VCAP::CloudController::ServiceUsageEvent',
                 key: :last_processed_guid,
                 primary_key: :guid
 
@@ -16,7 +16,7 @@ module VCAP::CloudController
       self[:last_processed_guid] = if guid.is_a?(String)
                                      guid
                                    else
-                                     # If it's an object, it's an AppUsageEvent
+                                     # If it's an object, it's a ServiceUsageEvent
                                      guid&.guid
                                    end
     end

@@ -2,7 +2,7 @@ require 'messages/base_message'
 require 'messages/validators'
 
 module VCAP::CloudController
-  class AppUsageConsumerUpdateMessage < BaseMessage
+  class ServiceUsageConsumerUpdateMessage < BaseMessage
     register_allowed_keys [:last_processed_guid]
 
     validates_with NoAdditionalKeysValidator
