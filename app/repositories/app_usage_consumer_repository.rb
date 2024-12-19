@@ -4,10 +4,13 @@ module VCAP::CloudController
   module Repositories
     class AppUsageConsumerRepository
       def create(consumer_id:, last_app_usage_event_id:)
-        AppUsageConsumer.create(
+        auc = AppUsageConsumer.new(
           consumer_id:,
           last_app_usage_event_id:
         )
+
+        auc.save
+        auc
       end
 
       def find_by_id(id)

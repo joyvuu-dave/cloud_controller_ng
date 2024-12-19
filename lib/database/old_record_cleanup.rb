@@ -3,13 +3,14 @@ require 'database/batch_delete'
 module Database
   class OldRecordCleanup
     class NoCurrentTimestampError < StandardError; end
-    attr_reader :model, :days_ago, :keep_at_least_one_record, :keep_running_records
+    attr_reader :model, :days_ago, :keep_at_least_one_record, :keep_running_records, :keep_unprocessed_records
 
-    def initialize(model, days_ago, keep_at_least_one_record: false, keep_running_records: false)
+    def initialize(model, days_ago, keep_at_least_one_record: false, keep_running_records: false, keep_unprocessed_records: false)
       @model = model
       @days_ago = days_ago
       @keep_at_least_one_record = keep_at_least_one_record
       @keep_running_records = keep_running_records
+      @keep_unprocessed_records = keep_unprocessed_records
     end
 
     def delete
@@ -22,6 +23,7 @@ module Database
       end
 
       old_records = exclude_running_records(old_records) if keep_running_records
+      old_records = exclude_unprocessed_records(old_records) if keep_unprocessed_records
 
       logger.info("Cleaning up #{old_records.count} #{model.table_name} table rows")
 
@@ -86,6 +88,37 @@ module Database
     def guid_symbol(model)
       return :app_guid if model == VCAP::CloudController::AppUsageEvent
       return :service_instance_guid if model == VCAP::CloudController::ServiceUsageEvent
+
+      nil
+    end
+
+    def exclude_unprocessed_records(old_records)
+      return old_records unless has_registered_consumer?(model)
+
+      consumer_model = consumer_model(model)
+
+      raise "Invalid consumer model: #{model}" if consumer_model.nil?
+
+      lowest_referenced_event_guid = nil
+      consumer_model.find_each do |consumer|
+        usage_event = model.find_by(guid: consumer_model.last_processed_guid)
+        lowest_referenced_event_guid = usage_event.id if lowest_referenced_event_guid.nil? || usage_event.id < lowest_referenced_event_guid
+      end
+
+      old_records
+        .where { id < lowest_referenced_event_guid } 
+    end
+
+    def has_registered_consumer?(model)
+      return true if model == VCAP::CloudController::AppUsageEvent && VCAP::CloudController::AppUsageConsumer.present?
+      return true if model == VCAP::CloudController::ServiceUsageEvent && VCAP::CloudController::ServiceUsageConsumer.present?
+
+      false
+    end
+
+    def usage_event_symbol(model)
+      return :app_usage_events if model == VCAP::CloudController::AppUsageEvent
+      return :service_usage_events if model == VCAP::CloudController::ServiceUsageEvent
 
       nil
     end

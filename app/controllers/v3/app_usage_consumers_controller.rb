@@ -1,23 +1,25 @@
-require 'pry'
 require 'messages/app_usage_consumer_create_message'
 require 'messages/app_usage_consumers_list_message'
 require 'presenters/v3/app_usage_consumer_presenter'
 require 'actions/app_usage_consumer_create'
-require 'fetchers/app_usage_consumer_list_fetcher'
 
 class AppUsageConsumersController < ApplicationController
   def index    
-    render status: :ok, json: { message: "Route hit successfully" }
+    #render status: :ok, json: { message: "Route hit successfully" }
     
     # message = "Great job hitting index!"
     #message = AppUsageConsumersListMessage.from_params(query_params)
-    # invalid_param!(message.errors.full_messages) unless message.valid?
+    #invalid_param!(message.errors.full_messages) unless message.valid?
 
     # dataset = if permission_queryer.can_read_globally?
-    #             AppUsageConsumerListFetcher.fetch_all(message)
+    #             #AppUsageConsumerListFetcher.fetch_all(message)
+    #             "yo"
     #           else
-    #             AppUsageConsumerListFetcher.fetch_for_spaces(message, space_guids: permission_queryer.readable_space_guids)
+    #             #AppUsageConsumerListFetcher.fetch_for_spaces(message, space_guids: permission_queryer.readable_space_guids)
+    #             "dude"
     #           end
+    dataset = AppUsageConsumer.all
+    render status: :ok, json: { message: dataset }
 
     # render status: :ok, json: Presenters::V3::PaginatedListPresenter.new(
     #   presenter: Presenters::V3::AppUsageConsumerPresenter,
@@ -35,18 +37,18 @@ class AppUsageConsumersController < ApplicationController
   end
 
   def create
-    logger.info("Auth token: #{VCAP::CloudController::SecurityContext.token}")
-    logger.info("Current user: #{VCAP::CloudController::SecurityContext.current_user}")
-    logger.info("Can write globally?: #{permission_queryer.can_write_globally?}")
+    # logger.info("Auth token: #{VCAP::CloudController::SecurityContext.token}")
+    # logger.info("Current user: #{VCAP::CloudController::SecurityContext.current_user}")
+    # logger.info("Can write globally?: #{permission_queryer.can_write_globally?}")
     
-    render status: :ok, json: { 
-      message: "Authentication checked",
-      auth_info: {
-        token_present: !VCAP::CloudController::SecurityContext.token.nil?,
-        user_present: !VCAP::CloudController::SecurityContext.current_user.nil?,
-        can_write: permission_queryer.can_write_globally?
-      }
-    }
+    # render status: :ok, json: { 
+    #   message: "Authentication checked",
+    #   auth_info: {
+    #     token_present: !VCAP::CloudController::SecurityContext.token.nil?,
+    #     user_present: !VCAP::CloudController::SecurityContext.current_user.nil?,
+    #     can_write: permission_queryer.can_write_globally?
+    #   }
+    # }
 
     # works
     # logger.info("Auth token: #{VCAP::CloudController::SecurityContext.token}")
@@ -60,16 +62,16 @@ class AppUsageConsumersController < ApplicationController
 
     #render status: :ok, json: { message: "Route hit successfully" }
 
-  #   unauthorized! unless permission_queryer.can_write_globally?
+    unauthorized! unless permission_queryer.can_write_globally?
 
-  #   message = AppUsageConsumerCreateMessage.new(hashed_params[:body])
-  #   unprocessable!(message.errors.full_messages) unless message.valid?
+    message = AppUsageConsumerCreateMessage.new(hashed_params[:body])
+    unprocessable!(message.errors.full_messages) unless message.valid?
 
-  #   app_usage_consumer = AppUsageConsumerCreate.create(message)
+    app_usage_consumer = AppUsageConsumerCreate.create(message)
 
-  #   render status: :created, json: Presenters::V3::AppUsageConsumerPresenter.new(app_usage_consumer)
-  # rescue AppUsageConsumerCreate::Error => e
-  #   unprocessable!(e.message)
+    render status: :created, json: Presenters::V3::AppUsageConsumerPresenter.new(app_usage_consumer)
+  rescue AppUsageConsumerCreate::Error => e
+    unprocessable!(e.message)
   end
 
   def update

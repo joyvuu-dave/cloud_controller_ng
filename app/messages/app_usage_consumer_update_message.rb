@@ -1,4 +1,5 @@
 require 'messages/base_message'
+require 'messages/validators'
 
 module VCAP::CloudController
   class AppUsageConsumerUpdateMessage < BaseMessage
