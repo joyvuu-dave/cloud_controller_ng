@@ -10,6 +10,7 @@ module VCAP::CloudController
     def validate
       validates_presence %i[consumer_guid last_processed_guid]
       validates_unique :consumer_guid
+      validates_max_length 255, :consumer_guid, message: 'must be less than 255 characters'
     end
 
     def last_processed_guid=(guid)
