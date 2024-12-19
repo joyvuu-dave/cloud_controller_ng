@@ -13,18 +13,17 @@ RSpec.describe Database::OldRecordCleanup do
     let!(:stale_app_usage_event_2_start) { VCAP::CloudController::AppUsageEvent.make(created_at: 2.days.ago, state: 'STARTED', app_guid: 'guid2') }
     let!(:fresh_app_usage_event_2_stop) { VCAP::CloudController::AppUsageEvent.make(created_at: 1.day.ago + 1.minute, state: 'STOPPED', app_guid: 'guid2') }
 
-    let!(:stale_app_usage_event_3_start) { VCAP::CloudController::AppUsageEvent.make(created_at: 2.days.ago, state: 'STARTED', app_guid: 'guid3') }
     let!(:stale_app_usage_event_3_stop) { VCAP::CloudController::AppUsageEvent.make(created_at: 3.days.ago, state: 'STOPPED', app_guid: 'guid3') }
+    let!(:stale_app_usage_event_3_start) { VCAP::CloudController::AppUsageEvent.make(created_at: 2.days.ago, state: 'STARTED', app_guid: 'guid3') }
 
     let!(:stale_service_usage_event_1_create) { VCAP::CloudController::ServiceUsageEvent.make(created_at: 2.days.ago, state: 'CREATED', service_instance_guid: 'guid1') }
 
     let!(:stale_service_usage_event_2_create) { VCAP::CloudController::ServiceUsageEvent.make(created_at: 2.days.ago, state: 'CREATED', service_instance_guid: 'guid2') }
     let!(:fresh_service_usage_event_2_delete) { VCAP::CloudController::ServiceUsageEvent.make(created_at: 1.day.ago + 1.minute, state: 'DELETED', service_instance_guid: 'guid2') }
 
-    let!(:stale_service_usage_event_3_create) { VCAP::CloudController::ServiceUsageEvent.make(created_at: 2.days.ago, state: 'CREATED', service_instance_guid: 'guid3') }
     let!(:stale_service_usage_event_3_delete) { VCAP::CloudController::ServiceUsageEvent.make(created_at: 3.days.ago, state: 'DELETED', service_instance_guid: 'guid3') }
+    let!(:stale_service_usage_event_3_create) { VCAP::CloudController::ServiceUsageEvent.make(created_at: 2.days.ago, state: 'CREATED', service_instance_guid: 'guid3') }
 
-    # Testing keep_unprocessed_records feature
     let!(:stale_app_usage_event_4_stop) { VCAP::CloudController::AppUsageEvent.make(created_at: 1.year.ago, state: 'STOPPED', app_guid: 'guid4') }
     let!(:stale_app_usage_event_5_stop) { VCAP::CloudController::AppUsageEvent.make(created_at: 1.year.ago, state: 'STOPPED', app_guid: 'guid5') }
     let!(:app_usage_consumer) { VCAP::CloudController::AppUsageConsumer.make(consumer_guid: 'guid1', last_processed_guid: stale_app_usage_event_5_stop) }
@@ -75,6 +74,7 @@ RSpec.describe Database::OldRecordCleanup do
       expect { stale_event2.reload }.to raise_error(Sequel::NoExistingObject)
     end
 
+     # Testing keep_running_records feature
     it 'keeps AppUsageEvent start record when there is no corresponding stop record' do
       record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::AppUsageEvent, 1, keep_at_least_one_record: false, keep_running_records: true,
                                                                                                keep_unprocessed_records: false)
@@ -90,7 +90,7 @@ RSpec.describe Database::OldRecordCleanup do
       expect(fresh_app_usage_event_2_stop.reload).to be_present
     end
 
-    xit 'keeps AppUsageEvent start record when stop record is newer' do
+    it 'keeps AppUsageEvent start record when stop record is newer' do
       record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::AppUsageEvent, 1, keep_at_least_one_record: false, keep_running_records: true,
                                                                                                keep_unprocessed_records: false)
       record_cleanup.delete
@@ -113,7 +113,7 @@ RSpec.describe Database::OldRecordCleanup do
       expect(fresh_service_usage_event_2_delete.reload).to be_present
     end
 
-    xit 'keeps ServiceUsageEvent create record when delete record is newer' do
+    it 'keeps ServiceUsageEvent create record when delete record is newer' do
       record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::ServiceUsageEvent, 1, keep_at_least_one_record: false, keep_running_records: true,
                                                                                                    keep_unprocessed_records: false)
       record_cleanup.delete
