@@ -47,7 +47,7 @@ module Database
     def perform_size_based_cleanup
       cutoff_date = current_timestamp_from_database - cutoff_age_in_days.to_i.days
       old_records = model.dataset.where(Sequel.lit('created_at < ?', cutoff_date))
-      
+
       if keep_at_least_one_record
         last_record = model.order(:id).last
         old_records = old_records.where(Sequel.lit('id < ?', last_record.id)) if last_record
@@ -55,7 +55,7 @@ module Database
 
       # Find any consumers that would be affected by this purge
       affected_consumers = find_affected_consumers(old_records)
-      
+
       # Remove those consumer records - they'll need to re-register
       remove_affected_consumers(affected_consumers) if affected_consumers.any?
 

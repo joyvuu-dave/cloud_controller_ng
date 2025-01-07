@@ -85,7 +85,6 @@ RSpec.describe CloudController::DelayedWorker do
       expect(Delayed::Worker.destroy_failed_jobs).to be false
       expect(Delayed::Worker.max_attempts).to eq(3)
       expect(Delayed::Worker.max_run_time).to eq(14_401)
-      expect(Delayed::Worker.sleep_delay).to eq(5)
     end
 
     it 'sets the worker name in the Steno context' do

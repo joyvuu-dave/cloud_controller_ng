@@ -1,17 +1,17 @@
 # Build image
-FROM sapmachine:21-jdk-headless-ubuntu-jammy AS builder
+FROM tpi-docker-virtual.usw1.packages.broadcom.com/sapmachine:21-jdk-headless-ubuntu-jammy AS builder
 
 WORKDIR /uaa
 
 # Patch admin client, add authority password.write
 COPY PatchAdminOAuthClient.java /PatchAdminOAuthClient.java
 RUN apt-get  update && apt-get install jq git curl -y \
-  && git clone -b $(curl -s https://api.github.com/repos/cloudfoundry/uaa/releases/latest | jq -r '.tag_name') https://github.com/cloudfoundry/uaa.git . --recursive --depth=1 --shallow-submodules \
+  && git clone -b 77.23.0 https://github.com/cloudfoundry/uaa.git . --recursive --depth=1 --shallow-submodules \
   && javac /PatchAdminOAuthClient.java -d / \
   && java -cp / PatchAdminOAuthClient uaa/src/main/webapp/WEB-INF/spring/oauth-clients.xml \
-  && ./gradlew -Pversion=$(curl -s https://api.github.com/repos/cloudfoundry/uaa/releases/latest | jq -r '.tag_name') clean build -x test
+  && ./gradlew -Pversion=77.23.0 clean build -x test
 
-FROM mikefarah/yq:4 AS yq
+FROM tpi-docker-virtual.usw1.packages.broadcom.com/mikefarah/yq:4 AS yq
 
 COPY --from=builder /uaa/scripts/cargo/uaa.yml /uaa.yml
 
@@ -24,7 +24,7 @@ RUN yq  e '.issuer.uri = "http://localhost:8080"' -i /uaa.yml \
   && yq e '.uaa.url = .issuer.uri' -i /uaa.yml
 
 # Runtime image
-FROM tomcat:9-jdk21
+FROM tpi-docker-virtual.usw1.packages.broadcom.com/library/tomcat:9-jdk21
 
 # Copy config file from yq image
 COPY --from=yq /uaa.yml /uaa.yml

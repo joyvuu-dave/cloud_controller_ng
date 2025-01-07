@@ -1,15 +1,11 @@
 #!/usr/bin/env ruby
 
 require File.expand_path('../config/boot', __dir__)
-ENV['RAILS_ENV'] ||= 'production'
-ENV['SINATRA_ACTIVESUPPORT_WARNING'] ||= 'false'
 
-ENV['DB_CONNECTION_STRING'] ||= if ENV['POSTGRES_CONNECTION_PREFIX']
-                                  ENV['POSTGRES_CONNECTION_PREFIX'] + '/cc_test'
-                                elsif ENV['MYSQL_CONNECTION_PREFIX']
-                                  ENV['MYSQL_CONNECTION_PREFIX'] + '/cc_test'
-                                else
-                                  'mysql2://root:password@localhost:3306/cc_test'
-                                end
+ENV['DB']='mysql'
+ENV['DB_CONNECTION_STRING'] = 'mysql2://root:supersecret@127.0.0.1:3306/ccdb'
+ENV['RACK_ENV'] = 'development'
+ENV['RAILS_ENV'] = 'development'
+ENV['SINATRA_ACTIVESUPPORT_WARNING'] = 'false'
 
 require 'cloud_controller/console'

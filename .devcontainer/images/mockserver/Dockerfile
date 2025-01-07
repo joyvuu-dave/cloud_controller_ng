@@ -1,4 +1,4 @@
-FROM golang:1
+FROM tpi-docker-virtual.usw1.packages.broadcom.com/library/golang:1
 
 WORKDIR /mock
 
