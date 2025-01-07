@@ -332,6 +332,12 @@ Rails.application.routes.draw do
   get '/service_usage_events', to: 'service_usage_events#index'
   post '/service_usage_events/actions/destructively_purge_all_and_reseed', to: 'service_usage_events#destructively_purge_all_and_reseed'
 
+  # app usage consumers
+  delete '/app_usage_consumers/:guid', to: 'app_usage_consumers#destroy'
+
+  # app usage consumers
+  delete '/service_usage_consumers/:guid', to: 'service_usage_consumers#destroy'
+
   # environment variable groups
   get '/environment_variable_groups/:name', to: 'environment_variable_groups#show'
   patch '/environment_variable_groups/:name', to: 'environment_variable_groups#update'
