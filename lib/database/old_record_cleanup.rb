@@ -3,118 +3,151 @@ require 'database/batch_delete'
 module Database
   class OldRecordCleanup
     class NoCurrentTimestampError < StandardError; end
-    attr_reader :model, :days_ago, :keep_at_least_one_record, :keep_running_records, :keep_unprocessed_records
+    attr_reader :model, :cutoff_age_in_days, :keep_at_least_one_record, :keep_running_records, :keep_unprocessed_records
 
-    def initialize(model, days_ago, keep_at_least_one_record: false, keep_running_records: false, keep_unprocessed_records: false)
+    def initialize(model, cutoff_age_in_days, keep_at_least_one_record: false, keep_running_records: false, keep_unprocessed_records: false)
       @model = model
-      @days_ago = days_ago
+      @cutoff_age_in_days = cutoff_age_in_days
       @keep_at_least_one_record = keep_at_least_one_record
       @keep_running_records = keep_running_records
       @keep_unprocessed_records = keep_unprocessed_records
     end
 
     def delete
-      cutoff_date = current_timestamp_from_database - days_ago.to_i.days
-
-      old_records = model.dataset.where(Sequel.lit('created_at < ?', cutoff_date))
-      if keep_at_least_one_record
-        last_record = model.order(:id).last
-        old_records = old_records.where(Sequel.lit('id < ?', last_record.id)) if last_record
+      if should_enforce_size_limit?
+        # Size-based cleanup - ignore keep_running_records and keep_unprocessed_records
+        perform_size_based_cleanup
+      else
+        # Normal date-based cleanup with all the usual protections
+        perform_normal_cleanup
       end
-
-      old_records = exclude_running_records(old_records) if keep_running_records
-      old_records = exclude_unprocessed_records(old_records) if keep_unprocessed_records
-
-      logger.info("Cleaning up #{old_records.count} #{model.table_name} table rows")
-
-      Database::BatchDelete.new(old_records, 1000).delete
     end
 
     private
-
-    def current_timestamp_from_database
-      # Evaluate the cutoff data upfront using the database's current time so that it remains the same
-      # for each iteration of the batched delete
-      model.db.fetch('SELECT CURRENT_TIMESTAMP as now').first[:now]
-    end
 
     def logger
       @logger ||= Steno.logger('cc.old_record_cleanup')
     end
 
-    def exclude_running_records(old_records)
-      return old_records unless has_duration?(model)
-
-      beginning_string = beginning_string(model)
-      ending_string = ending_string(model)
-      guid_symbol = guid_symbol(model)
-
-      raise "Invalid duration model: #{model}" if beginning_string.nil? || ending_string.nil? || guid_symbol.nil?
-
-      initial_records = old_records.where(state: beginning_string).from_self(alias: :initial_records)
-      final_records = old_records.where(state: ending_string).from_self(alias: :final_records)
-
-      exists_condition = final_records.where(Sequel[:final_records][guid_symbol] => Sequel[:initial_records][guid_symbol]).where do
-        Sequel[:final_records][:id] > Sequel[:initial_records][:id]
-      end.select(1).exists
-
-      prunable_initial_records = initial_records.where(exists_condition)
-      other_records = old_records.exclude(state: [beginning_string, ending_string])
-
-      prunable_initial_records.union(final_records, all: true).union(other_records, all: true)
+    def max_usage_event_rows
+      VCAP::CloudController::Config.config.get(:app_usage_events).fetch(:max_usage_event_rows, 5_000_000)
     end
 
-    def has_duration?(model)
-      return true if model == VCAP::CloudController::AppUsageEvent
-      return true if model == VCAP::CloudController::ServiceUsageEvent
-
-      false
+    def should_enforce_size_limit?
+      return false unless usage_event_model?
+      row_count = approximate_row_count(model)
+      if row_count > max_usage_event_rows
+        logger.info("Table #{model.table_name} exceeds size limit of #{max_usage_event_rows} rows")
+        true
+      else
+        false
+      end
     end
 
-    def beginning_string(model)
-      return VCAP::CloudController::ProcessModel::STARTED if model == VCAP::CloudController::AppUsageEvent
-      return VCAP::CloudController::Repositories::ServiceUsageEventRepository::CREATED_EVENT_STATE if model == VCAP::CloudController::ServiceUsageEvent
+    def perform_size_based_cleanup
+      cutoff_date = current_timestamp_from_database - cutoff_age_in_days.to_i.days
+      old_records = model.dataset.where(Sequel.lit('created_at < ?', cutoff_date))
+      
+      if keep_at_least_one_record
+        last_record = model.order(:id).last
+        old_records = old_records.where(Sequel.lit('id < ?', last_record.id)) if last_record
+      end
 
-      nil
+      # Find any consumers that would be affected by this purge
+      affected_consumers = find_affected_consumers(old_records)
+      
+      # Remove those consumer records - they'll need to re-register
+      remove_affected_consumers(affected_consumers) if affected_consumers.any?
+
+      logger.info("Cleaning up #{old_records.count} #{model.table_name} table rows (size-based cleanup)")
+      Database::BatchDelete.new(old_records, 1000).delete
     end
 
-    def ending_string(model)
-      return VCAP::CloudController::ProcessModel::STOPPED if model == VCAP::CloudController::AppUsageEvent
-      return VCAP::CloudController::Repositories::ServiceUsageEventRepository::DELETED_EVENT_STATE if model == VCAP::CloudController::ServiceUsageEvent
+    def perform_normal_cleanup
+      cutoff_date = current_timestamp_from_database - cutoff_age_in_days.to_i.days
+      old_records = model.dataset.where(Sequel.lit('created_at < ?', cutoff_date))
 
-      nil
+      old_records = apply_cleanup_filters(old_records)
+
+      logger.info("Cleaning up #{old_records.count} #{model.table_name} table rows (normal cleanup)")
+      Database::BatchDelete.new(old_records, 1000).delete
     end
 
-    def guid_symbol(model)
-      return :app_guid if model == VCAP::CloudController::AppUsageEvent
-      return :service_instance_guid if model == VCAP::CloudController::ServiceUsageEvent
+    def apply_cleanup_filters(dataset)
+      if keep_at_least_one_record
+        last_record = model.order(:id).last
+        dataset = dataset.where(Sequel.lit('id < ?', last_record.id)) if last_record
+      end
 
-      nil
+      if keep_running_records && model.columns.include?(:state)
+        dataset = dataset.exclude(state: 'STARTED')
+      end
+
+      if keep_unprocessed_records && usage_event_model?
+        consumer_model = registered_consumer_model(model)
+        if consumer_model
+          consumers = consumer_model.all
+          consumers.each do |consumer|
+            dataset = dataset.exclude(guid: consumer.last_processed_guid)
+          end
+        end
+      end
+
+      dataset
     end
 
-    def exclude_unprocessed_records(old_records)
+    def find_affected_consumers(records_to_delete)
       consumer_model = registered_consumer_model(model)
+      return [] unless consumer_model
 
-      return old_records unless consumer_model
+      # Find consumers whose last_processed_guid is in the records we're about to delete
+      consumer_model.where(last_processed_guid: records_to_delete.select(:guid))
+    end
 
-      # Find the usage event record with the lowest ID
-      # of any that are referenced by a consumer
-      referenced_event = model.
-                         join(consumer_model.table_name.to_sym, last_processed_guid: :guid).
-                         select(Sequel.function(:min, Sequel.qualify(model.table_name, :id)).as(:min_id)).
-                         first
+    def remove_affected_consumers(consumers)
+      logger.info("Removing #{consumers.count} affected consumers due to size-based cleanup")
+      consumers.delete
+    end
 
-      return old_records if referenced_event[:min_id].nil?
+    def approximate_row_count(model)
+      case model.db.database_type
+      when :postgres
+        # Lightning fast - just reads statistics
+        result = model.db[<<-SQL
+          SELECT reltuples::bigint AS estimate
+          FROM pg_class
+          WHERE relname = '#{model.table_name}'
+        SQL
+        ].first
+        result[:estimate].to_i
+      when :mysql, :mysql2
+        # Also quite fast - reads information_schema
+        result = model.db[<<-SQL
+          SELECT table_rows
+          FROM information_schema.tables
+          WHERE table_schema = DATABASE()
+            AND table_name = '#{model.table_name}'
+        SQL
+        ].first
+        result[:table_rows].to_i
+      end
+    end
 
-      old_records.where { id < referenced_event[:min_id] }
+    def current_timestamp_from_database
+      @current_timestamp ||= begin
+        now = model.db.fetch('SELECT CURRENT_TIMESTAMP as now').first[:now]
+        Time.zone ? Time.zone.parse(now.to_s) : now
+      end
+    end
+
+    def usage_event_model?
+      model == VCAP::CloudController::AppUsageEvent || model == VCAP::CloudController::ServiceUsageEvent
     end
 
     def registered_consumer_model(model)
       return VCAP::CloudController::AppUsageConsumer if model == VCAP::CloudController::AppUsageEvent && VCAP::CloudController::AppUsageConsumer.present?
-
       return VCAP::CloudController::ServiceUsageConsumer if model == VCAP::CloudController::ServiceUsageEvent && VCAP::CloudController::ServiceUsageConsumer.present?
-
-      false
+      nil
     end
   end
 end

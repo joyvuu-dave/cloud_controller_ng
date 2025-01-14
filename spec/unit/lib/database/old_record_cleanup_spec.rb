@@ -196,5 +196,57 @@ RSpec.describe Database::OldRecordCleanup do
       expect { stale_service_usage_event_1_stop.reload }.to raise_error(Sequel::NoExistingObject)
       expect(stale_service_usage_event_2_stop.reload).to be_present
     end
+
+    let(:cutoff_age_in_days) { 1 }
+    let(:max_usage_event_rows) { 5_000_000 }
+
+    before do
+      allow(VCAP::CloudController::Config.config).to receive(:get).with(:app_usage_events).and_return({ max_usage_event_rows: max_usage_event_rows })
+    end
+
+    context 'when table size exceeds limit' do
+      let(:model) { VCAP::CloudController::AppUsageEvent }
+
+      before do
+        allow(model.db).to receive(:fetch).with("SELECT COUNT(*) as count FROM #{model.table_name}").and_return([{ count: max_usage_event_rows + 1 }])
+        allow(model.db).to receive(:fetch).with('SELECT CURRENT_TIMESTAMP as now').and_call_original
+      end
+
+      it 'performs size-based cleanup' do
+        record_cleanup = Database::OldRecordCleanup.new(model, cutoff_age_in_days)
+        expect(Steno.logger('cc.old_record_cleanup')).to receive(:info).with(/exceeds size limit of #{max_usage_event_rows} rows/)
+        expect(Steno.logger('cc.old_record_cleanup')).to receive(:info).with(/Cleaning up \d+ #{model.table_name} table rows \(size-based cleanup\)/)
+        record_cleanup.delete
+      end
+    end
+
+    context 'when table size is within limit' do
+      let(:model) { VCAP::CloudController::AppUsageEvent }
+
+      before do
+        allow(model.db).to receive(:fetch).with("SELECT COUNT(*) as count FROM #{model.table_name}").and_return([{ count: max_usage_event_rows - 1 }])
+        allow(model.db).to receive(:fetch).with('SELECT CURRENT_TIMESTAMP as now').and_call_original
+      end
+
+      it 'performs normal cleanup' do
+        record_cleanup = Database::OldRecordCleanup.new(model, cutoff_age_in_days)
+        expect(Steno.logger('cc.old_record_cleanup')).to receive(:info).with(/Cleaning up \d+ #{model.table_name} table rows \(normal cleanup\)/)
+        record_cleanup.delete
+      end
+    end
+
+    context 'when table is not a usage event table' do
+      let(:model) { VCAP::CloudController::Event }
+
+      before do
+        allow(model.db).to receive(:fetch).with('SELECT CURRENT_TIMESTAMP as now').and_call_original
+      end
+
+      it 'performs normal cleanup' do
+        record_cleanup = Database::OldRecordCleanup.new(model, cutoff_age_in_days)
+        expect(Steno.logger('cc.old_record_cleanup')).to receive(:info).with(/Cleaning up \d+ #{model.table_name} table rows \(normal cleanup\)/)
+        record_cleanup.delete
+      end
+    end
   end
 end

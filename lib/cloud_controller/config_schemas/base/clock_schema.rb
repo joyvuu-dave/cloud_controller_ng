@@ -16,7 +16,16 @@ module VCAP::CloudController
               clock: Integer
             },
             app_usage_events: {
-              cutoff_age_in_days: Integer
+              required: true,
+              type: 'hash',
+              properties: {
+                cutoff_age_in_days: Integer,
+                max_usage_event_rows: {
+                  type: 'integer',
+                  default: 5_000_000,
+                  description: 'Maximum number of rows in the app_usage_events and service_usage_events tables before triggering a cleanup'
+                }
+              }
             },
             audit_events: {
               cutoff_age_in_days: Integer
@@ -169,7 +178,18 @@ module VCAP::CloudController
               frequency_in_seconds: Integer
             },
 
-            service_usage_events: { cutoff_age_in_days: Integer },
+            service_usage_events: { 
+              required: true,
+              type: 'hash',
+              properties: {
+                cutoff_age_in_days: Integer,
+                max_usage_event_rows: {
+                  type: 'integer',
+                  default: 5_000_000,
+                  description: 'Maximum number of rows in the app_usage_events and service_usage_events tables before triggering a cleanup'
+                }
+              }
+            },
             default_app_ssh_access: bool,
             allow_app_ssh_access: bool,
             jobs: {
