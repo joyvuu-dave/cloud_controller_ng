@@ -16,7 +16,7 @@ module VCAP::CloudController
           logger.info('Cleaning up old ServiceUsageEvent rows')
 
           repository = Repositories::ServiceUsageEventRepository.new
-          repository.delete_events_older_than(cutoff_age_in_days, threshold_for_keeping_unprocessed_records: threshold_for_keeping_unprocessed_records)
+          repository.delete_events_older_than(cutoff_age_in_days, threshold_for_keeping_unprocessed_records:)
         end
 
         def job_name_in_configuration

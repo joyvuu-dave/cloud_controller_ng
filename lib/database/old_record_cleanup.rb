@@ -5,7 +5,8 @@ module Database
     class NoCurrentTimestampError < StandardError; end
     attr_reader :model, :cutoff_age_in_days, :keep_at_least_one_record, :keep_running_records, :keep_unprocessed_records, :threshold_for_keeping_unprocessed_records
 
-    def initialize(model, cutoff_age_in_days, keep_at_least_one_record: false, keep_running_records: false, keep_unprocessed_records: false, threshold_for_keeping_unprocessed_records:)
+    def initialize(model, cutoff_age_in_days, threshold_for_keeping_unprocessed_records:, keep_at_least_one_record: false, keep_running_records: false,
+                   keep_unprocessed_records: false)
       @model = model
       @cutoff_age_in_days = cutoff_age_in_days
       @keep_at_least_one_record = keep_at_least_one_record
@@ -128,7 +129,7 @@ module Database
     def approximate_row_count(model)
       case model.db.database_type
       when :postgres
-        result = model.db[<<-SQL
+        result = model.db[<<-SQL.squish
           SELECT reltuples::bigint AS estimate
           FROM pg_class
           WHERE relname = '#{model.table_name}'
@@ -136,7 +137,7 @@ module Database
         ].first
         result[:estimate].to_i
       when :mysql, :mysql2
-        result = model.db[<<-SQL
+        result = model.db[<<-SQL.squish
           SELECT table_rows
           FROM information_schema.tables
           WHERE table_schema = DATABASE()
