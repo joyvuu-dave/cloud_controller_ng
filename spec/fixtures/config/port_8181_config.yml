@@ -30,7 +30,7 @@ jobs:
 
 app_usage_events:
   cutoff_age_in_days: 31
-  max_usage_event_rows: 5000000
+  threshold_for_keeping_unprocessed_records: 5000000
 
 audit_events:
   cutoff_age_in_days: 31
@@ -207,7 +207,7 @@ droplets:
 
 service_usage_events:
   cutoff_age_in_days: 31
-  max_usage_event_rows: 5000000
+  threshold_for_keeping_unprocessed_records: 5000000
 
 statsd_host: "127.0.0.1"
 statsd_port: 8125

@@ -151,8 +151,17 @@ module VCAP::CloudController
         AppUsageEvent.insert(column_map.keys, usage_query)
       end
 
-      def delete_events_older_than(cutoff_age_in_days)
-        Database::OldRecordCleanup.new(AppUsageEvent, cutoff_age_in_days, keep_at_least_one_record: true, keep_running_records: true, keep_unprocessed_records: true).delete
+      def delete_events_older_than(cutoff_age_in_days, threshold_for_keeping_unprocessed_records:)
+        old_record_cleanup = Database::OldRecordCleanup.new(
+          AppUsageEvent,
+          cutoff_age_in_days,
+          keep_at_least_one_record: true,
+          keep_running_records: true,
+          keep_unprocessed_records: true,
+          threshold_for_keeping_unprocessed_records: threshold_for_keeping_unprocessed_records
+        )
+
+        old_record_cleanup.delete
       end
 
       private

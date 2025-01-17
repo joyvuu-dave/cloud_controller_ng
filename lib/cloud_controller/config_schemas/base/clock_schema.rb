@@ -20,10 +20,10 @@ module VCAP::CloudController
               type: 'hash',
               properties: {
                 cutoff_age_in_days: Integer,
-                max_usage_event_rows: {
+                threshold_for_keeping_unprocessed_records: {
                   type: 'integer',
                   default: 5_000_000,
-                  description: 'Maximum number of rows in the app_usage_events and service_usage_events tables before triggering a cleanup'
+                  description: 'Threshold for maintaining unprocessed events'
                 }
               }
             },
@@ -178,15 +178,15 @@ module VCAP::CloudController
               frequency_in_seconds: Integer
             },
 
-            service_usage_events: { 
+            service_usage_events: {
               required: true,
               type: 'hash',
               properties: {
                 cutoff_age_in_days: Integer,
-                max_usage_event_rows: {
+                threshold_for_keeping_unprocessed_records: {
                   type: 'integer',
                   default: 5_000_000,
-                  description: 'Maximum number of rows in the app_usage_events and service_usage_events tables before triggering a cleanup'
+                  description: 'Threshold for maintaining unprocessed events'
                 }
               }
             },
