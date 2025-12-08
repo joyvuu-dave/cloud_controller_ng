@@ -66,11 +66,10 @@ module VCAP::CloudController
             it 'updates (or recreates) the route mapping with the new protocol' do
               ManifestRouteUpdate.update(app.guid, message, user_audit_info)
 
-              route_mappings = app.reload.route_mappings
+              route_mappings = app.reload.route_mappings_dataset.where(route:)
 
-              expect(route_mappings.count).to eq(2)
-              mapped_route = route_mappings.find { |rm| rm.route == route }
-              expect(mapped_route.protocol).to eq('http2')
+              expect(route_mappings.count).to eq(1)
+              expect(route_mappings.first.protocol).to eq('http2')
             end
           end
         end
