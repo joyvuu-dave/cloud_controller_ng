@@ -69,7 +69,9 @@ module VCAP::CloudController
               route_mappings = app.reload.route_mappings_dataset.where(route:)
 
               expect(route_mappings.count).to eq(1)
-              expect(route_mappings.first.protocol).to eq('http2')
+              mapped_route = route_mappings.first
+              expect(mapped_route).not_to be_nil
+              expect(mapped_route.protocol).to eq('http2')
             end
           end
         end
