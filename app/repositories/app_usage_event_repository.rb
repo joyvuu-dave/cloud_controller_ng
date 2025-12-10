@@ -88,7 +88,7 @@ module VCAP::CloudController
       end
 
       def purge_and_reseed_started_apps!
-        AppUsageEvent.dataset.truncate
+        truncate_with_fk_handling(AppUsageEvent.dataset)
 
         column_map = {
           app_name: :parent_app__name,
@@ -159,6 +159,22 @@ module VCAP::CloudController
 
       def buildpack_name_for_app(app)
         CloudController::UrlSecretObfuscator.obfuscate(app.custom_buildpack_url || app.detected_buildpack_name)
+      end
+
+      def truncate_with_fk_handling(dataset)
+        db = dataset.db
+        case db.database_type
+        when :postgres
+          dataset.truncate
+        when :mysql
+          # Use db.synchronize to ensure SET FOREIGN_KEY_CHECKS and TRUNCATE
+          # run on the same connection. MySQL's FOREIGN_KEY_CHECKS is session-specific.
+          db.synchronize do |conn|
+            conn.query('SET FOREIGN_KEY_CHECKS = 0')
+            conn.query("TRUNCATE TABLE #{dataset.first_source_table}")
+            conn.query('SET FOREIGN_KEY_CHECKS = 1')
+          end
+        end
       end
     end
   end

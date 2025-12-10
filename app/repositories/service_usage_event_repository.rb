@@ -54,7 +54,7 @@ module VCAP::CloudController
       end
 
       def purge_and_reseed_service_instances!
-        ServiceUsageEvent.dataset.truncate
+        truncate_with_fk_handling(ServiceUsageEvent.dataset)
 
         column_map = {
           # using service_instance guid because we need a unique guid for the service_usage_event.  the database will not generate these for us.
@@ -93,6 +93,24 @@ module VCAP::CloudController
 
       def delete_events_older_than(cutoff_age_in_days)
         Database::OldRecordCleanup.new(ServiceUsageEvent, cutoff_age_in_days, keep_at_least_one_record: true).delete
+      end
+
+      private
+
+      def truncate_with_fk_handling(dataset)
+        db = dataset.db
+        case db.database_type
+        when :postgres
+          dataset.truncate
+        when :mysql
+          # Use db.synchronize to ensure SET FOREIGN_KEY_CHECKS and TRUNCATE
+          # run on the same connection. MySQL's FOREIGN_KEY_CHECKS is session-specific.
+          db.synchronize do |conn|
+            conn.query('SET FOREIGN_KEY_CHECKS = 0')
+            conn.query("TRUNCATE TABLE #{dataset.first_source_table}")
+            conn.query('SET FOREIGN_KEY_CHECKS = 1')
+          end
+        end
       end
     end
   end
