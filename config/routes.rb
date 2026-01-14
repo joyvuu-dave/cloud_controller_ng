@@ -339,6 +339,12 @@ Rails.application.routes.draw do
   get '/app_usage/snapshots/:guid', to: 'app_usage_snapshots#show'
   get '/app_usage/snapshots/:guid/details', to: 'app_usage_snapshots#details'
 
+  # service usage snapshots
+  get '/service_usage/snapshots', to: 'service_usage_snapshots#index'
+  post '/service_usage/snapshots', to: 'service_usage_snapshots#create'
+  get '/service_usage/snapshots/:guid', to: 'service_usage_snapshots#show'
+  get '/service_usage/snapshots/:guid/details', to: 'service_usage_snapshots#details'
+
   # environment variable groups
   get '/environment_variable_groups/:name', to: 'environment_variable_groups#show'
   patch '/environment_variable_groups/:name', to: 'environment_variable_groups#update'
