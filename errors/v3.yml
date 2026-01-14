@@ -22,3 +22,18 @@
   name: InternalServerError
   http_code: 500
   message: "%s"
+
+390001:
+  name: AppUsageSnapshotGenerationInProgress
+  http_code: 409
+  message: "A app usage snapshot is already being generated. Please wait for it to complete."
+
+390002:
+  name: AppUsageSnapshotNotFound
+  http_code: 404
+  message: "App usage snapshot not found. Ensure it exists and you have access to it."
+
+390003:
+  name: AppUsageSnapshotGenerationFailed
+  http_code: 500
+  message: "Snapshot generation failed. Please try again or contact support."
