@@ -891,4 +891,23 @@ module VCAP::CloudController
 
   TestModelRedact.blueprint do
   end
+
+  AppUsageSnapshot.blueprint do
+    guid { Sham.guid }
+    checkpoint_event_id { 0 }
+    created_at { Time.now.utc }
+    process_count { 0 }
+    organization_count { 0 }
+    space_count { 0 }
+  end
+
+  AppUsageSnapshotDetail.blueprint do
+    usage_snapshot { AppUsageSnapshot.make }
+    organization_guid { Sham.guid }
+    space_guid { Sham.guid }
+    app_guid { Sham.guid }
+    process_guid { Sham.guid }
+    process_type { 'web' }
+    instances { 1 }
+  end
 end
