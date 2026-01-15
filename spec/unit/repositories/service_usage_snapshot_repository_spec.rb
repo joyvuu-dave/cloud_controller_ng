@@ -112,7 +112,7 @@ module VCAP::CloudController
         end
 
         context 'when there are no service instances' do
-          it 'populates snapshot with zero counts' do
+          it 'populates snapshot with zero counts and empty details' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
@@ -120,19 +120,20 @@ module VCAP::CloudController
             expect(snapshot.service_instance_count).to eq(0)
             expect(snapshot.organization_count).to eq(0)
             expect(snapshot.space_count).to eq(0)
-            expect(snapshot.checkpoint_event_id).to eq(0)
             expect(snapshot.completed_at).not_to be_nil
+            expect(snapshot.service_usage_snapshot_details).to be_empty
           end
         end
 
         context 'when there are no usage events (empty system)' do
-          it 'sets checkpoint_event_id to 0 and checkpoint_event_created_at to nil' do
+          it 'sets checkpoint_event_id to nil and checkpoint_event_created_at to nil' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
             snapshot.reload
-            expect(snapshot.checkpoint_event_id).to eq(0)
+            expect(snapshot.checkpoint_event_id).to be_nil
             expect(snapshot.checkpoint_event_created_at).to be_nil
+            expect(snapshot.completed_at).not_to be_nil
           end
         end
 

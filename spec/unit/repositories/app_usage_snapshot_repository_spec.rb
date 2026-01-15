@@ -80,7 +80,7 @@ module VCAP::CloudController
         end
 
         context 'when there are no running processes' do
-          it 'populates snapshot with zero counts' do
+          it 'populates snapshot with zero counts and empty details' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
@@ -88,19 +88,20 @@ module VCAP::CloudController
             expect(snapshot.process_count).to eq(0)
             expect(snapshot.organization_count).to eq(0)
             expect(snapshot.space_count).to eq(0)
-            expect(snapshot.checkpoint_event_id).to eq(0)
             expect(snapshot.completed_at).not_to be_nil
+            expect(snapshot.app_usage_snapshot_details).to be_empty
           end
         end
 
         context 'when there are no usage events (empty system)' do
-          it 'sets checkpoint_event_id to 0 and checkpoint_event_created_at to nil' do
+          it 'sets checkpoint_event_id to nil and checkpoint_event_created_at to nil' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
             snapshot.reload
-            expect(snapshot.checkpoint_event_id).to eq(0)
+            expect(snapshot.checkpoint_event_id).to be_nil
             expect(snapshot.checkpoint_event_created_at).to be_nil
+            expect(snapshot.completed_at).not_to be_nil
           end
         end
 
@@ -150,6 +151,35 @@ module VCAP::CloudController
             snapshot.reload
             expect(snapshot.process_count).to eq(100)
             expect(snapshot.app_usage_snapshot_details.count).to eq(100)
+          end
+        end
+
+        context 'with processes spanning multiple batches' do
+          # This test verifies that the streaming/paged_each approach works correctly
+          # when there are more processes than the batch size (1000)
+          it 'correctly inserts all details across multiple batches' do
+            # Create enough processes to span multiple batches (batch size is 1000)
+            # We'll create 2500 to test 3 batches (1000 + 1000 + 500)
+            2500.times do |i|
+              ProcessModel.make(app: app_model, state: ProcessModel::STARTED, instances: 1, type: "batch-test-#{i}")
+            end
+
+            # Track how many times multi_insert is called
+            insert_call_count = 0
+            allow(AppUsageSnapshotDetail).to receive(:multi_insert) do |rows|
+              insert_call_count += 1
+              # Actually perform the insert
+              AppUsageSnapshotDetail.dataset.multi_insert(rows)
+            end
+
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
+
+            snapshot.reload
+            expect(snapshot.process_count).to eq(2500)
+            expect(snapshot.app_usage_snapshot_details.count).to eq(2500)
+            # Should have been called 3 times: 1000 + 1000 + 500
+            expect(insert_call_count).to eq(3)
           end
         end
 

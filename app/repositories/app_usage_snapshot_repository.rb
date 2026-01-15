@@ -32,9 +32,10 @@ module VCAP::CloudController
             space_count: space_count
           )
 
-          # Load and batch insert details
-          running_processes = process_query.all
-          insert_snapshot_details(snapshot.id, running_processes)
+          # Stream and batch insert details using cursor-based iteration.
+          # This avoids loading all rows into memory at once, which could OOM
+          # on large foundations (1M+ processes = gigabytes of RAM).
+          insert_snapshot_details_streaming(snapshot.id, process_query)
 
           # Mark complete
           # NOTE: We call Time.now.utc multiple times (for created_at and completed_at).
@@ -80,24 +81,42 @@ module VCAP::CloudController
           order(:"#{ProcessModel.table_name}__id")
       end
 
-      def insert_snapshot_details(snapshot_id, processes)
-        # Batch size of 1000 is consistent with other bulk operations in this codebase.
-        # See: lib/cloud_controller/diego/reporters/instances_stats_reporter.rb
-        # This balances memory usage against number of database round-trips.
-        processes.each_slice(1000) do |batch|
-          rows = batch.map do |p|
-            {
-              snapshot_id: snapshot_id,
-              organization_guid: p[:organization_guid],
-              space_guid: p[:space_guid],
-              app_guid: p[:app_guid],
-              process_guid: p[:process_guid],
-              process_type: p[:process_type],
-              instances: p[:instances]
-            }
+      # Batch size of 1000 is consistent with other bulk operations in this codebase.
+      # See: lib/cloud_controller/diego/reporters/instances_stats_reporter.rb
+      # This balances memory usage against number of database round-trips.
+      BATCH_SIZE = 1000
+
+      def insert_snapshot_details_streaming(snapshot_id, process_query)
+        # Use paged_each for cursor-based iteration. This fetches rows in batches
+        # from the database without loading everything into Ruby memory at once.
+        # Memory profile: O(BATCH_SIZE) instead of O(total_rows)
+        batch = []
+        process_query.paged_each(rows_per_fetch: BATCH_SIZE) do |row|
+          batch << row
+          if batch.size >= BATCH_SIZE
+            insert_snapshot_batch(snapshot_id, batch)
+            batch = []
           end
-          AppUsageSnapshotDetail.multi_insert(rows)
         end
+        # Insert any remaining rows
+        insert_snapshot_batch(snapshot_id, batch) unless batch.empty?
+      end
+
+      def insert_snapshot_batch(snapshot_id, batch)
+        return if batch.empty?
+
+        rows = batch.map do |p|
+          {
+            snapshot_id: snapshot_id,
+            organization_guid: p[:organization_guid],
+            space_guid: p[:space_guid],
+            app_guid: p[:app_guid],
+            process_guid: p[:process_guid],
+            process_type: p[:process_type],
+            instances: p[:instances]
+          }
+        end
+        AppUsageSnapshotDetail.multi_insert(rows)
       end
 
       def prometheus

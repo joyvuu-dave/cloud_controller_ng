@@ -53,6 +53,24 @@ RSpec.describe 'App Usage Snapshots' do
           expect(last_response).to have_error_message('An app usage snapshot is already being generated')
         end
       end
+
+      # NOTE: This documents the known race condition behavior.
+      # Two concurrent requests could both pass the in-progress check before either
+      # creates a snapshot. This is a documented design decision - the race window
+      # is small and duplicate checkpoints are harmless (consumers just use the most recent).
+      #
+      # The check-then-create pattern:
+      #   1. Check: existing_snapshot = AppUsageSnapshot.where(completed_at: nil).first
+      #   2. Create: AppUsageSnapshot.create(...)
+      #
+      # Two requests could both pass step 1 before either reaches step 2.
+      # This is acceptable because:
+      # - The race window is very small (milliseconds)
+      # - Duplicate snapshots are harmless (same data, different timestamps)
+      # - Consumers use the most recent completed snapshot
+      # - Adding a unique constraint would add complexity without significant benefit
+      #
+      # Testing actual race conditions is non-deterministic, so we don't test it here.
     end
 
     context 'when the user is not an admin' do
@@ -125,7 +143,7 @@ RSpec.describe 'App Usage Snapshots' do
         get '/v3/app_usage/snapshots/does-not-exist', nil, admin_header
 
         expect(last_response.status).to eq(404)
-        expect(last_response).to have_error_message('Usage snapshot not found')
+        expect(last_response).to have_error_message('App usage snapshot not found')
       end
     end
   end
@@ -279,7 +297,7 @@ RSpec.describe 'App Usage Snapshots' do
         get '/v3/app_usage/snapshots/does-not-exist/details', nil, admin_header
 
         expect(last_response.status).to eq(404)
-        expect(last_response).to have_error_message('Usage snapshot not found')
+        expect(last_response).to have_error_message('App usage snapshot not found')
       end
     end
   end

@@ -32,9 +32,10 @@ module VCAP::CloudController
             space_count: space_count
           )
 
-          # Load and batch insert details
-          service_instances = service_query.all
-          insert_snapshot_details(snapshot.id, service_instances)
+          # Stream and batch insert details using cursor-based iteration.
+          # This avoids loading all rows into memory at once, which could OOM
+          # on large foundations (1M+ service instances = gigabytes of RAM).
+          insert_snapshot_details_streaming(snapshot.id, service_query)
 
           # Mark complete
           # NOTE: We call Time.now.utc multiple times (for created_at and completed_at).
@@ -88,29 +89,47 @@ module VCAP::CloudController
           order(:service_instances__id)
       end
 
-      def insert_snapshot_details(snapshot_id, service_instances)
-        # Batch size of 1000 is consistent with other bulk operations in this codebase.
-        # See: lib/cloud_controller/diego/reporters/instances_stats_reporter.rb
-        # This balances memory usage against number of database round-trips.
-        service_instances.each_slice(1000) do |batch|
-          rows = batch.map do |si|
-            {
-              snapshot_id: snapshot_id,
-              organization_guid: si[:organization_guid],
-              space_guid: si[:space_guid],
-              service_instance_guid: si[:service_instance_guid],
-              service_instance_name: si[:service_instance_name],
-              service_instance_type: si[:service_instance_type],
-              service_plan_guid: si[:service_plan_guid],
-              service_plan_name: si[:service_plan_name],
-              service_offering_guid: si[:service_offering_guid],
-              service_offering_name: si[:service_offering_name],
-              service_broker_guid: si[:service_broker_guid],
-              service_broker_name: si[:service_broker_name]
-            }
+      # Batch size of 1000 is consistent with other bulk operations in this codebase.
+      # See: lib/cloud_controller/diego/reporters/instances_stats_reporter.rb
+      # This balances memory usage against number of database round-trips.
+      BATCH_SIZE = 1000
+
+      def insert_snapshot_details_streaming(snapshot_id, service_query)
+        # Use paged_each for cursor-based iteration. This fetches rows in batches
+        # from the database without loading everything into Ruby memory at once.
+        # Memory profile: O(BATCH_SIZE) instead of O(total_rows)
+        batch = []
+        service_query.paged_each(rows_per_fetch: BATCH_SIZE) do |row|
+          batch << row
+          if batch.size >= BATCH_SIZE
+            insert_snapshot_batch(snapshot_id, batch)
+            batch = []
           end
-          ServiceUsageSnapshotDetail.multi_insert(rows)
         end
+        # Insert any remaining rows
+        insert_snapshot_batch(snapshot_id, batch) unless batch.empty?
+      end
+
+      def insert_snapshot_batch(snapshot_id, batch)
+        return if batch.empty?
+
+        rows = batch.map do |si|
+          {
+            snapshot_id: snapshot_id,
+            organization_guid: si[:organization_guid],
+            space_guid: si[:space_guid],
+            service_instance_guid: si[:service_instance_guid],
+            service_instance_name: si[:service_instance_name],
+            service_instance_type: si[:service_instance_type],
+            service_plan_guid: si[:service_plan_guid],
+            service_plan_name: si[:service_plan_name],
+            service_offering_guid: si[:service_offering_guid],
+            service_offering_name: si[:service_offering_name],
+            service_broker_guid: si[:service_broker_guid],
+            service_broker_name: si[:service_broker_name]
+          }
+        end
+        ServiceUsageSnapshotDetail.multi_insert(rows)
       end
 
       def prometheus
