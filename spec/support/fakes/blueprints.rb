@@ -902,7 +902,7 @@ module VCAP::CloudController
   end
 
   AppUsageSnapshotDetail.blueprint do
-    usage_snapshot { AppUsageSnapshot.make }
+    app_usage_snapshot { AppUsageSnapshot.make }
     organization_guid { Sham.guid }
     space_guid { Sham.guid }
     app_guid { Sham.guid }

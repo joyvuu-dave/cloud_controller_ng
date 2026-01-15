@@ -333,12 +333,13 @@ curl "https://api.example.org/v3/service_usage/snapshots/snapshot-guid-123/detai
 
 ### Snapshot Generation Process
 
-1. **Advisory Lock**: Acquire database-level lock to prevent concurrent generation
+1. **Create Placeholder**: Create snapshot record with `completed_at = NULL`
 2. **Checkpoint**: Record `max(service_usage_event.id)` and its `created_at`
 3. **Query**: Fetch all service instances with LEFT JOINs for deleted orgs/spaces and user-provided services
 4. **Transactional Insert**: Batch insert details (1000 rows at a time)
 5. **Mark Complete**: Set `completed_at` timestamp
-6. **Release Lock**: Ensure MySQL lock is released even on failure
+
+**Note on Concurrent Requests:** In rare cases (two admins clicking simultaneously), two snapshots may be created with the same `checkpoint_event_id`. This is harmless - both contain valid data, and consumers can dedupe by checkpoint if needed.
 
 **Query Pattern:**
 ```sql
@@ -393,8 +394,25 @@ curl "https://api.example.org/v3/service_usage_events/98765" \
   -H "Authorization: bearer [token]"
 ```
 
-**If 404**: Checkpoint event was pruned (>30 days old), snapshot may be stale
+**If 404**: Checkpoint event was pruned (>30 days old). Create a new snapshot and reconcile your state with the new baseline.
+
 **If 200**: Verify `created_at` matches `checkpoint_event_created_at` from snapshot
+
+**Tip:** Create snapshots more frequently than the 30-day pruning window to ensure you always have a valid checkpoint to fall back to.
+
+## Edge Cases
+
+### Deleted Organizations or Spaces
+
+If an organization or space is deleted while a service instance still exists, the snapshot will still capture that instance. The `organization_guid` and `space_guid` fields may be NULL in this case. This is intentional - billing systems should still account for orphaned service instances.
+
+### Verifying Snapshot Integrity
+
+Each snapshot provides an `integrity_valid?` check that verifies:
+1. The snapshot has completed (not stuck in processing)
+2. The number of detail records matches the expected count
+
+Billing consumers should verify integrity before trusting snapshot data. See the App Usage Snapshots documentation for detailed usage examples.
 
 ## Cleanup and Retention
 

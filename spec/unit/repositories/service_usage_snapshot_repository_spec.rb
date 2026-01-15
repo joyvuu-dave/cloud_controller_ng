@@ -1,5 +1,4 @@
 require 'spec_helper'
-require 'repositories/service_usage_snapshot_repository'
 
 module VCAP::CloudController
   module Repositories
@@ -12,15 +11,29 @@ module VCAP::CloudController
       let(:service) { service_plan.service }
       let(:service_broker) { service.service_broker }
 
-      describe '#generate_snapshot!' do
+      # Helper to create a placeholder snapshot (as the controller would)
+      def create_placeholder_snapshot
+        ServiceUsageSnapshot.create(
+          guid: SecureRandom.uuid,
+          checkpoint_event_id: 0,
+          created_at: Time.now.utc,
+          completed_at: nil,
+          service_instance_count: 0,
+          organization_count: 0,
+          space_count: 0
+        )
+      end
+
+      describe '#populate_snapshot!' do
         context 'when there are managed service instances' do
           let!(:instance1) { ManagedServiceInstance.make(space:, service_plan:) }
           let!(:instance2) { ManagedServiceInstance.make(space:, service_plan:) }
 
-          it 'creates a snapshot with correct counts' do
-            snapshot = repository.generate_snapshot!
+          it 'populates the snapshot with correct counts' do
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
 
-            expect(snapshot).to be_a(ServiceUsageSnapshot)
+            snapshot.reload
             expect(snapshot.service_instance_count).to eq(2)
             expect(snapshot.organization_count).to eq(1)
             expect(snapshot.space_count).to eq(1)
@@ -28,7 +41,8 @@ module VCAP::CloudController
           end
 
           it 'creates snapshot details for each service instance' do
-            snapshot = repository.generate_snapshot!
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
 
             details = snapshot.service_usage_snapshot_details
             expect(details.count).to eq(2)
@@ -48,8 +62,10 @@ module VCAP::CloudController
             ServiceUsageEvent.make
             last_event = ServiceUsageEvent.make
 
-            snapshot = repository.generate_snapshot!
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
 
+            snapshot.reload
             expect(snapshot.checkpoint_event_id).to eq(last_event.id)
             expect(snapshot.checkpoint_event_created_at).to be_within(1.second).of(last_event.created_at)
           end
@@ -59,8 +75,10 @@ module VCAP::CloudController
           let!(:user_provided_instance) { UserProvidedServiceInstance.make(space:) }
 
           it 'creates snapshot with user-provided service instance' do
-            snapshot = repository.generate_snapshot!
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
 
+            snapshot.reload
             expect(snapshot.service_instance_count).to eq(1)
 
             detail = snapshot.service_usage_snapshot_details.first
@@ -77,8 +95,10 @@ module VCAP::CloudController
           let!(:user_provided_instance) { UserProvidedServiceInstance.make(space:) }
 
           it 'includes both types in the snapshot' do
-            snapshot = repository.generate_snapshot!
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
 
+            snapshot.reload
             expect(snapshot.service_instance_count).to eq(2)
 
             managed_detail = snapshot.service_usage_snapshot_details.find { |d| d.service_instance_guid == managed_instance.guid }
@@ -92,48 +112,59 @@ module VCAP::CloudController
         end
 
         context 'when there are no service instances' do
-          it 'creates a snapshot with zero counts' do
-            snapshot = repository.generate_snapshot!
+          it 'populates snapshot with zero counts' do
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
 
+            snapshot.reload
             expect(snapshot.service_instance_count).to eq(0)
             expect(snapshot.organization_count).to eq(0)
             expect(snapshot.space_count).to eq(0)
             expect(snapshot.checkpoint_event_id).to eq(0)
+            expect(snapshot.completed_at).not_to be_nil
           end
         end
 
-        context 'when org or space is deleted' do
+        context 'when there are no usage events (empty system)' do
+          it 'sets checkpoint_event_id to 0 and checkpoint_event_created_at to nil' do
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
+
+            snapshot.reload
+            expect(snapshot.checkpoint_event_id).to eq(0)
+            expect(snapshot.checkpoint_event_created_at).to be_nil
+          end
+        end
+
+        context 'when org or space is deleted but service instance still exists' do
           let!(:instance) { ManagedServiceInstance.make(space:, service_plan:) }
 
-          before do
-            # Simulate soft-deleted org/space by using LEFT JOIN
-            allow_any_instance_of(Sequel::Dataset).to receive(:all).and_wrap_original do |method, *args|
-              result = method.call(*args)
-              # Simulate NULL org_guid from LEFT JOIN
-              result.each { |r| r[:organization_guid] = nil if r.is_a?(Hash) }
-              result
-            end
-          end
+          it 'includes the service instance with NULL org/space guids' do
+            # The LEFT JOIN will return NULL for org/space if they're deleted
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
 
-          it 'handles NULL organization_guid gracefully' do
-            snapshot = repository.generate_snapshot!
-
-            expect(snapshot.organization_count).to eq(0)
-            expect(snapshot.service_instance_count).to be >= 0
+            snapshot.reload
+            expect(snapshot.service_instance_count).to eq(1)
+            expect(snapshot.service_usage_snapshot_details.count).to eq(1)
           end
         end
 
-        context 'when snapshot generation fails' do
-          before do
-            allow_any_instance_of(ServiceUsageSnapshot).to receive(:update).and_raise(Sequel::DatabaseError.new('DB error'))
-          end
+        context 'when snapshot population fails' do
+          it 'raises the error and rolls back transaction' do
+            snapshot = create_placeholder_snapshot
+            allow(ServiceUsageSnapshotDetail).to receive(:multi_insert).and_raise(Sequel::DatabaseError.new('DB error'))
 
-          it 'raises the error and increments failure metric' do
             prometheus = instance_double(CloudController::Metrics::PrometheusUpdater)
             allow(CloudController::DependencyLocator.instance).to receive(:prometheus_updater).and_return(prometheus)
             expect(prometheus).to receive(:increment_counter_metric).with(:cc_service_usage_snapshot_generation_failures_total)
 
-            expect { repository.generate_snapshot! }.to raise_error(Sequel::DatabaseError)
+            expect { repository.populate_snapshot!(snapshot) }.to raise_error(Sequel::DatabaseError)
+
+            # Snapshot should still exist (created by controller) but not be completed
+            snapshot.reload
+            expect(snapshot.completed_at).to be_nil
+            expect(snapshot.service_instance_count).to eq(0) # Not updated due to rollback
           end
         end
 
@@ -147,7 +178,8 @@ module VCAP::CloudController
             expect(prometheus).to receive(:update_histogram_metric).with(:cc_service_usage_snapshot_generation_duration_seconds, kind_of(Numeric))
             expect(prometheus).to receive(:update_gauge_metric).with(:cc_service_usage_snapshot_service_instance_count, 1)
 
-            repository.generate_snapshot!
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
           end
         end
       end

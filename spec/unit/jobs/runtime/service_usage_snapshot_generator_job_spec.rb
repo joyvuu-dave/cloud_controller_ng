@@ -1,11 +1,11 @@
 require 'spec_helper'
-require 'jobs/runtime/service_usage_snapshot_generator_job'
 
 module VCAP::CloudController
   module Jobs
     module Runtime
       RSpec.describe ServiceUsageSnapshotGeneratorJob do
-        subject(:job) { ServiceUsageSnapshotGeneratorJob.new }
+        let(:snapshot) { ServiceUsageSnapshot.make(service_instance_count: 50, completed_at: nil) }
+        subject(:job) { ServiceUsageSnapshotGeneratorJob.new(snapshot.guid) }
 
         let(:repository) { instance_double(Repositories::ServiceUsageSnapshotRepository) }
 
@@ -13,47 +13,60 @@ module VCAP::CloudController
           allow(Repositories::ServiceUsageSnapshotRepository).to receive(:new).and_return(repository)
         end
 
-        describe '#perform' do
-          let(:snapshot) { ServiceUsageSnapshot.make(service_instance_count: 50) }
-
-          before do
-            allow(repository).to receive(:generate_snapshot!).and_return(snapshot)
-          end
-
-          it 'calls the repository to generate a snapshot' do
-            expect(repository).to receive(:generate_snapshot!)
-
-            job.perform
-          end
-
-          it 'sets resource_guid to the generated snapshot guid' do
-            job.perform
-
+        describe '#initialize' do
+          it 'sets resource_guid from the constructor argument' do
+            # Following the pattern from CreateBindingAsyncJob:
+            # The resource_guid is set in constructor so PollableJobWrapper.before_enqueue
+            # can read it when creating the PollableJobModel record.
             expect(job.resource_guid).to eq(snapshot.guid)
+          end
+        end
+
+        describe '#perform' do
+          before do
+            allow(repository).to receive(:populate_snapshot!)
+          end
+
+          it 'fetches the snapshot and calls the repository to populate it' do
+            expect(repository).to receive(:populate_snapshot!).with(snapshot)
+
+            job.perform
           end
 
           it 'logs the start and completion' do
+            allow(repository).to receive(:populate_snapshot!) do |s|
+              s.update(service_instance_count: 50, completed_at: Time.now.utc)
+            end
+
             logger = instance_double(Steno::Logger)
             allow(Steno).to receive(:logger).with('cc.background.service-usage-snapshot-generator').and_return(logger)
 
-            expect(logger).to receive(:info).with('Starting service usage snapshot generation')
+            expect(logger).to receive(:info).with("Starting service usage snapshot generation for snapshot #{snapshot.guid}")
             expect(logger).to receive(:info).with("Service usage snapshot #{snapshot.guid} completed: 50 service instances")
 
             job.perform
           end
 
-          context 'when generation fails' do
+          context 'when snapshot is not found' do
+            subject(:job) { ServiceUsageSnapshotGeneratorJob.new('non-existent-guid') }
+
+            it 'raises an error' do
+              expect { job.perform }.to raise_error(RuntimeError, /Snapshot not found: non-existent-guid/)
+            end
+          end
+
+          context 'when population fails' do
             let(:error) { StandardError.new('Database connection failed') }
 
             before do
-              allow(repository).to receive(:generate_snapshot!).and_raise(error)
+              allow(repository).to receive(:populate_snapshot!).and_raise(error)
             end
 
             it 'logs the error with backtrace' do
               logger = instance_double(Steno::Logger)
               allow(Steno).to receive(:logger).with('cc.background.service-usage-snapshot-generator').and_return(logger)
 
-              expect(logger).to receive(:info).with('Starting service usage snapshot generation')
+              expect(logger).to receive(:info).with("Starting service usage snapshot generation for snapshot #{snapshot.guid}")
               expect(logger).to receive(:error).with(/Service usage snapshot generation failed: Database connection failed/)
 
               expect { job.perform }.to raise_error(StandardError, 'Database connection failed')
@@ -90,17 +103,10 @@ module VCAP::CloudController
         end
 
         describe 'PollableJobWrapper integration' do
-          let(:snapshot) { ServiceUsageSnapshot.make }
-
-          before do
-            allow(repository).to receive(:generate_snapshot!).and_return(snapshot)
-          end
-
-          it 'provides resource_guid for PollableJobModel linking' do
-            expect(job.resource_guid).to be_nil
-
-            job.perform
-
+          it 'provides resource_guid for PollableJobModel linking at construction time' do
+            # This is the key difference from before: resource_guid is available
+            # immediately after construction, not just after perform()
+            job = ServiceUsageSnapshotGeneratorJob.new(snapshot.guid)
             expect(job.resource_guid).to eq(snapshot.guid)
             expect(job.resource_type).to eq('service_usage_snapshot')
           end

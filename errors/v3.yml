@@ -26,7 +26,7 @@
 390001:
   name: AppUsageSnapshotGenerationInProgress
   http_code: 409
-  message: "A app usage snapshot is already being generated. Please wait for it to complete."
+  message: "An app usage snapshot is already being generated. Please wait for it to complete."
 
 390002:
   name: AppUsageSnapshotNotFound

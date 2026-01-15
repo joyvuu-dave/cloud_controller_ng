@@ -1,12 +1,16 @@
 module VCAP::CloudController
   module Repositories
     class ServiceUsageSnapshotRepository
-      def generate_snapshot!
+      # Populates an existing snapshot record with actual data.
+      # The snapshot was created by the controller to establish the job link
+      # (following the pattern from CreateBindingAsyncJob).
+      #
+      # @param snapshot [ServiceUsageSnapshot] The pre-created snapshot record to populate
+      def populate_snapshot!(snapshot)
         start_time = Time.now
-        snapshot = nil
 
         DB.transaction do
-          # Get checkpoint
+          # Get checkpoint - the most recent usage event at this moment
           checkpoint_event = ServiceUsageEvent.order(Sequel.desc(:id)).first
           checkpoint_event_id = checkpoint_event&.id || 0
           checkpoint_event_created_at = checkpoint_event&.created_at
@@ -19,12 +23,10 @@ module VCAP::CloudController
           org_count = service_query.select(:organization_guid).exclude(organization_guid: nil).distinct.count
           space_count = service_query.select(:space_guid).exclude(space_guid: nil).distinct.count
 
-          # Create snapshot record
-          snapshot = ServiceUsageSnapshot.create(
-            guid: SecureRandom.uuid,
+          # Update snapshot with actual data
+          snapshot.update(
             checkpoint_event_id: checkpoint_event_id,
             checkpoint_event_created_at: checkpoint_event_created_at,
-            created_at: Time.now.utc,
             service_instance_count: service_instance_count,
             organization_count: org_count,
             space_count: space_count
@@ -35,6 +37,10 @@ module VCAP::CloudController
           insert_snapshot_details(snapshot.id, service_instances)
 
           # Mark complete
+          # Note: We call Time.now.utc multiple times (for created_at and completed_at).
+          # In theory, clock adjustments could cause completed_at < created_at, but this
+          # is extremely rare and doesn't affect functionality. The timestamps are for
+          # informational purposes, not ordering guarantees.
           snapshot.update(completed_at: Time.now.utc)
         end
 
@@ -80,6 +86,9 @@ module VCAP::CloudController
       end
 
       def insert_snapshot_details(snapshot_id, service_instances)
+        # Batch size of 1000 is consistent with other bulk operations in this codebase.
+        # See: lib/cloud_controller/diego/reporters/instances_stats_reporter.rb
+        # This balances memory usage against number of database round-trips.
         service_instances.each_slice(1000) do |batch|
           rows = batch.map do |si|
             {

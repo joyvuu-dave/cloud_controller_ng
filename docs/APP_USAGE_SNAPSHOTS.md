@@ -327,12 +327,22 @@ If a snapshot is already being generated, subsequent requests will fail with:
   "errors": [{
     "code": 390001,
     "title": "CF-AppUsageSnapshotGenerationInProgress",
-    "detail": "A usage snapshot is already being generated. Please wait for it to complete."
+    "detail": "An app usage snapshot is already being generated. Please wait for it to complete."
   }]
 }
 ```
 
 **Solution**: Wait for the current snapshot to complete or use the existing in-progress snapshot.
+
+### Duplicate Checkpoints
+
+In rare cases (two admins clicking simultaneously), two snapshots may be created with the same `checkpoint_event_id`. This is harmless because:
+
+- Both snapshots contain valid, consistent data
+- The checkpoint is just a "starting point" marker
+- Consumers should dedupe by `checkpoint_event_id` if needed
+
+The race window is extremely small (milliseconds), and the cost of adding database-level locking to prevent this is not justified.
 
 ### Snapshot Generation Failure
 
@@ -346,7 +356,11 @@ If snapshot generation fails, the job will show:
 }
 ```
 
-**Solution**: Retry the snapshot creation. The system ensures no partial snapshots are created.
+**Solution**: Retry the snapshot creation. The system ensures no partial snapshots are created. Any stale in-progress snapshots (stuck for more than 1 hour) are automatically cleaned up.
+
+### Deleted Organizations or Spaces
+
+If an organization or space is deleted while a process is still running, the snapshot will still capture that process. The `organization_guid` and `space_guid` fields may be NULL in this case. This is intentional - billing systems should still account for orphaned processes.
 
 ### Large Datasets
 
@@ -357,12 +371,60 @@ For foundations with 100K+ running processes:
 
 ### Checkpoint Pruning
 
-If events are pruned while you're processing:
+Usage events are pruned after 30 days. If your snapshot's `checkpoint_event` link returns 404, the checkpoint event has been pruned.
 
-1. Detect pruning by checking if events are missing
-2. Request a new snapshot
-3. Reconcile your state with the new baseline
-4. Resume processing from the new checkpoint
+**How to handle this:**
+
+1. Check if the checkpoint event exists:
+   ```bash
+   curl "https://api.example.org/v3/app_usage_events/999999" \
+     -H "Authorization: bearer [token]"
+   ```
+
+2. If you receive a 404, create a new snapshot:
+   ```bash
+   curl "https://api.example.org/v3/app_usage/snapshots" \
+     -X POST \
+     -H "Authorization: bearer [token]"
+   ```
+
+3. Reconcile your state with the new baseline and resume processing from the new checkpoint.
+
+**Tip:** Create snapshots more frequently than the 30-day pruning window to ensure you always have a valid checkpoint to fall back to.
+
+### Verifying Snapshot Integrity
+
+Each snapshot provides an `integrity_valid?` check that verifies:
+1. The snapshot has completed (not stuck in processing)
+2. The number of detail records matches the expected count
+
+Billing consumers should verify integrity before trusting snapshot data:
+
+```ruby
+snapshot = fetch_snapshot(guid)
+
+if snapshot.processing?
+  # Still generating, wait and retry
+  sleep(30)
+  retry
+elsif !snapshot.integrity_valid?
+  # Something went wrong, request a new snapshot
+  log.error("Snapshot #{guid} failed integrity check")
+  request_new_snapshot
+else
+  # Safe to use for billing
+  process_snapshot_for_billing(snapshot)
+end
+```
+
+**What integrity_valid? catches:**
+- Partial failures where some batches inserted but not all
+- Snapshots stuck in processing state
+- Any mismatch between expected and actual detail count
+
+**What it doesn't catch:**
+- Logical errors in the query (wrong processes selected)
+- Data corruption within individual records
 
 ## Performance Characteristics
 

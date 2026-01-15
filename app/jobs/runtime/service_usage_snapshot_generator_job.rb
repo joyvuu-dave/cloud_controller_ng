@@ -4,19 +4,23 @@ module VCAP::CloudController
       class ServiceUsageSnapshotGeneratorJob < VCAP::CloudController::Jobs::CCJob
         attr_reader :resource_guid
 
-        def initialize
-          @resource_guid = nil
+        # Following the pattern from CreateBindingAsyncJob (app/jobs/v3/create_binding_async_job.rb):
+        # The resource_guid must be set in the constructor so that PollableJobWrapper.before_enqueue
+        # can read it when creating the PollableJobModel record.
+        # Setting it in perform() is too late - the PollableJobModel already exists by then.
+        def initialize(snapshot_guid)
+          @resource_guid = snapshot_guid
         end
 
         def perform
           logger = Steno.logger('cc.background.service-usage-snapshot-generator')
-          logger.info('Starting service usage snapshot generation')
+          logger.info("Starting service usage snapshot generation for snapshot #{@resource_guid}")
+
+          snapshot = ServiceUsageSnapshot.first(guid: @resource_guid)
+          raise "Snapshot not found: #{@resource_guid}" unless snapshot
 
           repository = Repositories::ServiceUsageSnapshotRepository.new
-          snapshot = repository.generate_snapshot!
-
-          # Store for PollableJobModel linking
-          @resource_guid = snapshot.guid
+          repository.populate_snapshot!(snapshot)
 
           logger.info("Service usage snapshot #{snapshot.guid} completed: #{snapshot.service_instance_count} service instances")
         rescue StandardError => e

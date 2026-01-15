@@ -49,8 +49,8 @@ RSpec.describe 'App Usage Snapshots' do
         it 'returns 409 Conflict' do
           post '/v3/app_usage/snapshots', nil, admin_header
 
-          expect(last_response.status).to eq(422)
-          expect(last_response).to have_error_message('A usage snapshot is already being generated')
+          expect(last_response.status).to eq(409)
+          expect(last_response).to have_error_message('An app usage snapshot is already being generated')
         end
       end
     end
@@ -206,7 +206,7 @@ RSpec.describe 'App Usage Snapshots' do
 
     let!(:detail1) do
       VCAP::CloudController::AppUsageSnapshotDetail.create(
-        usage_snapshot: snapshot,
+        app_usage_snapshot: snapshot,
         organization_guid: org.guid,
         space_guid: space.guid,
         app_guid: 'app-1',
@@ -218,7 +218,7 @@ RSpec.describe 'App Usage Snapshots' do
 
     let!(:detail2) do
       VCAP::CloudController::AppUsageSnapshotDetail.create(
-        usage_snapshot: snapshot,
+        app_usage_snapshot: snapshot,
         organization_guid: org.guid,
         space_guid: space.guid,
         app_guid: 'app-2',

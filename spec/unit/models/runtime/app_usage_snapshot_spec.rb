@@ -6,8 +6,8 @@ module VCAP::CloudController
 
     describe 'associations' do
       it 'has many app_usage_snapshot_details' do
-        detail1 = AppUsageSnapshotDetail.make(usage_snapshot: snapshot)
-        detail2 = AppUsageSnapshotDetail.make(usage_snapshot: snapshot)
+        detail1 = AppUsageSnapshotDetail.make(app_usage_snapshot: snapshot)
+        detail2 = AppUsageSnapshotDetail.make(app_usage_snapshot: snapshot)
 
         expect(snapshot.app_usage_snapshot_details).to contain_exactly(detail1, detail2)
       end
@@ -62,6 +62,36 @@ module VCAP::CloudController
       it 'returns true when completed_at is set' do
         snapshot.completed_at = Time.now.utc
         expect(snapshot.complete?).to be true
+      end
+    end
+
+    describe '#integrity_valid?' do
+      it 'returns true for complete snapshot with matching detail count' do
+        snapshot = AppUsageSnapshot.make(completed_at: Time.now.utc, process_count: 2)
+        AppUsageSnapshotDetail.make(app_usage_snapshot: snapshot)
+        AppUsageSnapshotDetail.make(app_usage_snapshot: snapshot)
+
+        expect(snapshot.integrity_valid?).to be true
+      end
+
+      it 'returns false for incomplete snapshot (processing)' do
+        snapshot = AppUsageSnapshot.make(completed_at: nil, process_count: 5)
+
+        expect(snapshot.integrity_valid?).to be false
+      end
+
+      it 'returns false when detail count does not match process_count' do
+        snapshot = AppUsageSnapshot.make(completed_at: Time.now.utc, process_count: 10)
+        # Only create 5 details instead of 10
+        5.times { AppUsageSnapshotDetail.make(app_usage_snapshot: snapshot) }
+
+        expect(snapshot.integrity_valid?).to be false
+      end
+
+      it 'returns true for completed snapshot with zero processes and zero details' do
+        snapshot = AppUsageSnapshot.make(completed_at: Time.now.utc, process_count: 0)
+
+        expect(snapshot.integrity_valid?).to be true
       end
     end
   end

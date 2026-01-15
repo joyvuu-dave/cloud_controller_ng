@@ -64,5 +64,35 @@ module VCAP::CloudController
         expect(snapshot.complete?).to be true
       end
     end
+
+    describe '#integrity_valid?' do
+      it 'returns true for complete snapshot with matching detail count' do
+        snapshot = ServiceUsageSnapshot.make(completed_at: Time.now.utc, service_instance_count: 2)
+        ServiceUsageSnapshotDetail.make(service_usage_snapshot: snapshot)
+        ServiceUsageSnapshotDetail.make(service_usage_snapshot: snapshot)
+
+        expect(snapshot.integrity_valid?).to be true
+      end
+
+      it 'returns false for incomplete snapshot (processing)' do
+        snapshot = ServiceUsageSnapshot.make(completed_at: nil, service_instance_count: 5)
+
+        expect(snapshot.integrity_valid?).to be false
+      end
+
+      it 'returns false when detail count does not match service_instance_count' do
+        snapshot = ServiceUsageSnapshot.make(completed_at: Time.now.utc, service_instance_count: 10)
+        # Only create 5 details instead of 10
+        5.times { ServiceUsageSnapshotDetail.make(service_usage_snapshot: snapshot) }
+
+        expect(snapshot.integrity_valid?).to be false
+      end
+
+      it 'returns true for completed snapshot with zero service instances and zero details' do
+        snapshot = ServiceUsageSnapshot.make(completed_at: Time.now.utc, service_instance_count: 0)
+
+        expect(snapshot.integrity_valid?).to be true
+      end
+    end
   end
 end

@@ -32,13 +32,19 @@ module VCAP::CloudController
             details: { href: url_builder.build_url(path: "/v3/service_usage/snapshots/#{snapshot.guid}/details") }
           }
 
-          # Find associated job
-          pollable_job = PollableJobModel.where(
-            resource_type: 'service_usage_snapshot',
-            resource_guid: snapshot.guid
-          ).first
+          # Performance optimization: Only query for job link if snapshot is still processing.
+          # Once a snapshot is complete, the job is no longer relevant to consumers - they
+          # interact with the snapshot directly. This prevents N+1 queries when listing
+          # many completed snapshots. For completed snapshots (the common case), we skip
+          # the job lookup entirely, avoiding one database query per snapshot rendered.
+          if snapshot.processing?
+            pollable_job = PollableJobModel.where(
+              resource_type: 'service_usage_snapshot',
+              resource_guid: snapshot.guid
+            ).first
 
-          links[:job] = { href: url_builder.build_url(path: "/v3/jobs/#{pollable_job.guid}") } if pollable_job
+            links[:job] = { href: url_builder.build_url(path: "/v3/jobs/#{pollable_job.guid}") } if pollable_job
+          end
 
           if snapshot.checkpoint_event_id && snapshot.checkpoint_event_id > 0
             links[:checkpoint_event] = { href: url_builder.build_url(path: "/v3/service_usage_events/#{snapshot.checkpoint_event_id}") }

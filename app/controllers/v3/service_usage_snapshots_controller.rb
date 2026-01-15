@@ -61,11 +61,29 @@ class ServiceUsageSnapshotsController < ApplicationController
 
     unauthorized! unless permission_queryer.can_write_globally?
 
-    # Check for existing in-progress snapshot
+    # Check for existing in-progress snapshot (completed_at is NULL)
     existing_snapshot = ServiceUsageSnapshot.where(completed_at: nil).first
     raise CloudController::Errors::ApiError.new_from_details('ServiceUsageSnapshotGenerationInProgress') if existing_snapshot
 
-    job = Jobs::Runtime::ServiceUsageSnapshotGeneratorJob.new
+    # Following the pattern established by CreateBindingAsyncJob:
+    # Create the resource record FIRST, then pass its guid to the job.
+    # This ensures PollableJobModel.resource_guid is set correctly at enqueue time.
+    # See: app/jobs/v3/create_binding_async_job.rb lines 14-17
+    #
+    # We create a placeholder snapshot with minimal data. The job will populate
+    # the actual checkpoint, counts, and details. The snapshot is identifiable
+    # as "in progress" by having completed_at = NULL.
+    snapshot = ServiceUsageSnapshot.create(
+      guid: SecureRandom.uuid,
+      checkpoint_event_id: 0,
+      created_at: Time.now.utc,
+      completed_at: nil,
+      service_instance_count: 0,
+      organization_count: 0,
+      space_count: 0
+    )
+
+    job = Jobs::Runtime::ServiceUsageSnapshotGeneratorJob.new(snapshot.guid)
     pollable_job = Jobs::Enqueuer.new(queue: Jobs::Queues.generic).enqueue_pollable(job)
 
     head :accepted, 'Location' => url_builder.build_url(path: "/v3/jobs/#{pollable_job.guid}")
