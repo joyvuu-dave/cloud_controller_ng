@@ -38,7 +38,16 @@ module VCAP::CloudController::Metrics
       { type: :gauge, name: :cc_running_tasks_total, docstring: 'Total running tasks', aggregation: :most_recent },
       { type: :gauge, name: :cc_running_tasks_memory_bytes, docstring: 'Total memory consumed by running tasks', aggregation: :most_recent },
       { type: :gauge, name: :cc_users_total, docstring: 'Number of users', aggregation: :most_recent },
-      { type: :gauge, name: :cc_deployments_in_progress_total, docstring: 'Number of in progress deployments', aggregation: :most_recent }
+      { type: :gauge, name: :cc_deployments_in_progress_total, docstring: 'Number of in progress deployments', aggregation: :most_recent },
+      { type: :histogram, name: :cc_app_usage_snapshot_generation_duration_seconds, docstring: 'Time taken to generate app usage snapshots', buckets: DELAYED_JOB_METRIC_BUCKETS },
+      { type: :gauge, name: :cc_app_usage_snapshot_process_count, docstring: 'Number of processes in last generated app usage snapshot', aggregation: :most_recent },
+      { type: :counter, name: :cc_app_usage_snapshot_generation_failures_total, docstring: 'Total number of failed app usage snapshot generations' },
+      { type: :gauge, name: :cc_app_usage_snapshots_cleaned_up_total, docstring: 'Number of app usage snapshots cleaned up', aggregation: :most_recent },
+      { type: :histogram, name: :cc_service_usage_snapshot_generation_duration_seconds, docstring: 'Time taken to generate service usage snapshots',
+        buckets: DELAYED_JOB_METRIC_BUCKETS },
+      { type: :gauge, name: :cc_service_usage_snapshot_service_instance_count, docstring: 'Number of service instances in last generated snapshot', aggregation: :most_recent },
+      { type: :counter, name: :cc_service_usage_snapshot_generation_failures_total, docstring: 'Total number of failed service snapshot generations' },
+      { type: :gauge, name: :cc_service_usage_snapshots_cleaned_up_total, docstring: 'Number of service snapshots cleaned up', aggregation: :most_recent }
     ].freeze
 
     PUMA_METRICS = [

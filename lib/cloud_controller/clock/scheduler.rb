@@ -16,7 +16,9 @@ module VCAP::CloudController
       { name: 'pollable_job_cleanup', class: Jobs::Runtime::PollableJobCleanup, time: '02:00', arg_from_config: %i[pollable_jobs cutoff_age_in_days] },
       { name: 'prune_completed_deployments', class: Jobs::Runtime::PruneCompletedDeployments, time: '03:00', arg_from_config: [:max_retained_deployments_per_app] },
       { name: 'prune_completed_builds', class: Jobs::Runtime::PruneCompletedBuilds, time: '03:30', arg_from_config: [:max_retained_builds_per_app] },
-      { name: 'prune_excess_app_revisions', class: Jobs::Runtime::PruneExcessAppRevisions, time: '03:35', arg_from_config: [:max_retained_revisions_per_app] }
+      { name: 'prune_excess_app_revisions', class: Jobs::Runtime::PruneExcessAppRevisions, time: '03:35', arg_from_config: [:max_retained_revisions_per_app] },
+      { name: 'app_usage_snapshots', class: Jobs::Runtime::AppUsageSnapshotsCleanup, time: '04:00', arg_from_config: %i[app_usage_snapshots cutoff_age_in_days] },
+      { name: 'service_usage_snapshots', class: Jobs::Runtime::ServiceUsageSnapshotsCleanup, time: '04:05', arg_from_config: %i[service_usage_snapshots cutoff_age_in_days] }
     ].freeze
 
     FREQUENTS = [
