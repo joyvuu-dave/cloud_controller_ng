@@ -9,19 +9,21 @@ module VCAP::CloudController
       def populate_snapshot!(snapshot)
         start_time = Time.now
 
-        DB.transaction do
+        AppUsageSnapshot.db.transaction do
           # Get checkpoint - the most recent usage event at this moment
           checkpoint_event = AppUsageEvent.order(Sequel.desc(:id)).first
           checkpoint_event_id = checkpoint_event&.id
           checkpoint_event_created_at = checkpoint_event&.created_at
 
-          # Build query for running processes (with LEFT JOIN for deleted orgs/spaces)
+          # Build base query with joins (for count queries) and full query with selects (for streaming)
+          base_query = fetch_running_processes_base_query
           process_query = fetch_running_processes_query
 
           # Calculate summary counts using SQL aggregates (no full load into memory)
-          process_count = process_query.count
-          org_count = process_query.select(:organization_guid).exclude(organization_guid: nil).distinct.count
-          space_count = process_query.select(:space_guid).exclude(space_guid: nil).distinct.count
+          # Use base query with table-qualified column names for counts
+          process_count = base_query.count
+          org_count = base_query.select(:"#{Organization.table_name}__guid").exclude("#{Organization.table_name}__guid": nil).distinct.count
+          space_count = base_query.select(:"#{Space.table_name}__guid").exclude("#{Space.table_name}__guid": nil).distinct.count
 
           # Update snapshot with actual data
           snapshot.update(
@@ -63,22 +65,28 @@ module VCAP::CloudController
 
       private
 
-      def fetch_running_processes_query
+      # Base query with joins only (no SELECT clause) - used for count operations
+      def fetch_running_processes_base_query
         ProcessModel.
           left_join(AppModel.table_name, { guid: :app_guid }, table_alias: :parent_app).
           left_join(Space.table_name, guid: :space_guid).
           left_join(Organization.table_name, id: :organization_id).
-          select(
-            :"#{Organization.table_name}__guid".as(:organization_guid),
-            :"#{Space.table_name}__guid".as(:space_guid),
-            :parent_app__guid.as(:app_guid),
-            :"#{ProcessModel.table_name}__guid".as(:process_guid),
-            :"#{ProcessModel.table_name}__type".as(:process_type),
-            :"#{ProcessModel.table_name}__instances".as(:instances)
-          ).
           where("#{ProcessModel.table_name}__state": ProcessModel::STARTED).
           exclude("#{ProcessModel.table_name}__type": %w[TASK build]).
           order(:"#{ProcessModel.table_name}__id")
+      end
+
+      # Full query with SELECT clause and aliases - used for streaming/iteration
+      def fetch_running_processes_query
+        fetch_running_processes_base_query.
+          select(
+            Sequel.as(:"#{Organization.table_name}__guid", :organization_guid),
+            Sequel.as(:"#{Space.table_name}__guid", :space_guid),
+            Sequel.as(:parent_app__guid, :app_guid),
+            Sequel.as(:"#{ProcessModel.table_name}__guid", :process_guid),
+            Sequel.as(:"#{ProcessModel.table_name}__type", :process_type),
+            Sequel.as(:"#{ProcessModel.table_name}__instances", :instances)
+          )
       end
 
       # Batch size of 1000 is consistent with other bulk operations in this codebase.

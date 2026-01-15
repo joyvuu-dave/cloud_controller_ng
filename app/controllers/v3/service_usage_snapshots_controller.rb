@@ -12,9 +12,9 @@ class ServiceUsageSnapshotsController < ApplicationController
     message = ServiceUsageSnapshotsListMessage.from_params(query_params)
     unprocessable!(message.errors.full_messages) unless message.valid?
 
-    unauthorized! unless permission_queryer.can_read_globally?
-
-    dataset = ServiceUsageSnapshotListFetcher.fetch_all(message, ServiceUsageSnapshot.dataset)
+    # Return empty dataset for non-admin users (following ServiceUsageEventsController pattern)
+    dataset = ServiceUsageSnapshot.where(guid: [])
+    dataset = ServiceUsageSnapshotListFetcher.fetch_all(message, ServiceUsageSnapshot.dataset) if permission_queryer.can_read_globally?
 
     render status: :ok, json: Presenters::V3::PaginatedListPresenter.new(
       presenter: Presenters::V3::ServiceUsageSnapshotPresenter,
@@ -25,7 +25,8 @@ class ServiceUsageSnapshotsController < ApplicationController
   end
 
   def show
-    unauthorized! unless permission_queryer.can_read_globally?
+    # Return 404 for non-admin users (following ServiceUsageEventsController pattern)
+    snapshot_not_found! unless permission_queryer.can_read_globally?
 
     snapshot = ServiceUsageSnapshot.first(guid: hashed_params[:guid])
     snapshot_not_found! unless snapshot
@@ -37,15 +38,15 @@ class ServiceUsageSnapshotsController < ApplicationController
     message = ServiceUsageSnapshotDetailsListMessage.from_params(query_params)
     unprocessable!(message.errors.full_messages) unless message.valid?
 
-    unauthorized! unless permission_queryer.can_read_globally?
+    # Return 404 for non-admin users (following ServiceUsageEventsController pattern)
+    snapshot_not_found! unless permission_queryer.can_read_globally?
 
     snapshot = ServiceUsageSnapshot.first(guid: hashed_params[:guid])
     snapshot_not_found! unless snapshot
 
-    dataset = ServiceUsageSnapshotDetailsListFetcher.fetch_all(
-      message,
-      snapshot.service_usage_snapshot_details_dataset
-    )
+    # Return empty dataset for non-admin users
+    dataset = ServiceUsageSnapshotDetail.where(id: [])
+    dataset = ServiceUsageSnapshotDetailsListFetcher.fetch_all(message, snapshot.service_usage_snapshot_details_dataset) if permission_queryer.can_read_globally?
 
     render status: :ok, json: Presenters::V3::PaginatedListPresenter.new(
       presenter: Presenters::V3::ServiceUsageSnapshotDetailPresenter,

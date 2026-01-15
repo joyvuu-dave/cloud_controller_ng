@@ -9,19 +9,21 @@ module VCAP::CloudController
       def populate_snapshot!(snapshot)
         start_time = Time.now
 
-        DB.transaction do
+        ServiceUsageSnapshot.db.transaction do
           # Get checkpoint - the most recent usage event at this moment
           checkpoint_event = ServiceUsageEvent.order(Sequel.desc(:id)).first
           checkpoint_event_id = checkpoint_event&.id
           checkpoint_event_created_at = checkpoint_event&.created_at
 
-          # Build query for service instances (with LEFT JOIN for deleted orgs/spaces and user-provided services)
+          # Build base query with joins (for count queries) and full query with selects (for streaming)
+          base_query = fetch_service_instances_base_query
           service_query = fetch_service_instances_query
 
           # Calculate summary counts using SQL aggregates (no full load into memory)
-          service_instance_count = service_query.count
-          org_count = service_query.select(:organization_guid).exclude(organization_guid: nil).distinct.count
-          space_count = service_query.select(:space_guid).exclude(space_guid: nil).distinct.count
+          # Use base query with table-qualified column names for counts
+          service_instance_count = base_query.count
+          org_count = base_query.select(:organizations__guid).exclude(organizations__guid: nil).distinct.count
+          space_count = base_query.select(:spaces__guid).exclude(spaces__guid: nil).distinct.count
 
           # Update snapshot with actual data
           snapshot.update(
@@ -63,7 +65,8 @@ module VCAP::CloudController
 
       private
 
-      def fetch_service_instances_query
+      # Base query with joins only (no SELECT clause) - used for count operations
+      def fetch_service_instances_base_query
         # Mirror the query from ServiceUsageEventRepository#purge_and_reseed_service_instances!
         # Use LEFT JOIN for service_plans, services, and service_brokers because user-provided services don't have those relations
         # Use LEFT JOIN for spaces and organizations to handle soft-deleted entities
@@ -73,6 +76,12 @@ module VCAP::CloudController
           left_join(:service_plans, id: :service_instances__service_plan_id).
           left_join(:services, id: :service_plans__service_id).
           left_join(:service_brokers, id: :services__service_broker_id).
+          order(:service_instances__id)
+      end
+
+      # Full query with SELECT clause and aliases - used for streaming/iteration
+      def fetch_service_instances_query
+        fetch_service_instances_base_query.
           select(
             :organizations__guid___organization_guid,
             :spaces__guid___space_guid,
@@ -85,8 +94,7 @@ module VCAP::CloudController
             :services__label___service_offering_name,
             :service_brokers__guid___service_broker_guid,
             :service_brokers__name___service_broker_name
-          ).
-          order(:service_instances__id)
+          )
       end
 
       # Batch size of 1000 is consistent with other bulk operations in this codebase.

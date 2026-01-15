@@ -224,7 +224,7 @@ RSpec.describe 'App Usage Snapshots' do
 
     let!(:detail1) do
       VCAP::CloudController::AppUsageSnapshotDetail.create(
-        app_usage_snapshot: snapshot,
+        snapshot_id: snapshot.id,
         organization_guid: org.guid,
         space_guid: space.guid,
         app_guid: 'app-1',
@@ -236,7 +236,7 @@ RSpec.describe 'App Usage Snapshots' do
 
     let!(:detail2) do
       VCAP::CloudController::AppUsageSnapshotDetail.create(
-        app_usage_snapshot: snapshot,
+        snapshot_id: snapshot.id,
         organization_guid: org.guid,
         space_guid: space.guid,
         app_guid: 'app-2',

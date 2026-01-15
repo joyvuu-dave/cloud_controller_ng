@@ -153,11 +153,13 @@ module VCAP::CloudController
         end
 
         context 'when snapshot population fails' do
+          let!(:instance) { ManagedServiceInstance.make(space:, service_plan:) }
+
           it 'raises the error and rolls back transaction' do
             snapshot = create_placeholder_snapshot
             allow(ServiceUsageSnapshotDetail).to receive(:multi_insert).and_raise(Sequel::DatabaseError.new('DB error'))
 
-            prometheus = instance_double(CloudController::Metrics::PrometheusUpdater)
+            prometheus = instance_double(VCAP::CloudController::Metrics::PrometheusUpdater)
             allow(CloudController::DependencyLocator.instance).to receive(:prometheus_updater).and_return(prometheus)
             expect(prometheus).to receive(:increment_counter_metric).with(:cc_service_usage_snapshot_generation_failures_total)
 
@@ -174,7 +176,7 @@ module VCAP::CloudController
           let!(:instance) { ManagedServiceInstance.make(space:, service_plan:) }
 
           it 'records generation duration' do
-            prometheus = instance_double(CloudController::Metrics::PrometheusUpdater)
+            prometheus = instance_double(VCAP::CloudController::Metrics::PrometheusUpdater)
             allow(CloudController::DependencyLocator.instance).to receive(:prometheus_updater).and_return(prometheus)
 
             expect(prometheus).to receive(:update_histogram_metric).with(:cc_service_usage_snapshot_generation_duration_seconds, kind_of(Numeric))

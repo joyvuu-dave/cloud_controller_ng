@@ -43,10 +43,10 @@ RSpec.describe 'Service Usage Snapshots' do
       expect(parsed_response['summary']['service_instance_count']).to eq(10)
     end
 
-    it 'requires admin permissions' do
+    it 'returns 404 for non-admin users' do
       get "/v3/service_usage/snapshots/#{snapshot.guid}", nil, headers_for(user)
 
-      expect(last_response.status).to eq(403)
+      expect(last_response.status).to eq(404)
     end
 
     it 'returns 404 for non-existent snapshot' do
@@ -68,10 +68,11 @@ RSpec.describe 'Service Usage Snapshots' do
       expect(parsed_response['resources'].pluck('guid')).to contain_exactly(snapshot1.guid, snapshot2.guid)
     end
 
-    it 'requires admin permissions' do
+    it 'returns empty list for non-admin users' do
       get '/v3/service_usage/snapshots', nil, headers_for(user)
 
-      expect(last_response.status).to eq(403)
+      expect(last_response.status).to eq(200)
+      expect(parsed_response['pagination']['total_results']).to eq(0)
     end
 
     it 'supports pagination' do
@@ -89,7 +90,7 @@ RSpec.describe 'Service Usage Snapshots' do
     let(:snapshot) { VCAP::CloudController::ServiceUsageSnapshot.make(completed_at: Time.now.utc) }
     let!(:detail1) do
       VCAP::CloudController::ServiceUsageSnapshotDetail.make(
-        service_usage_snapshot: snapshot,
+        snapshot_id: snapshot.id,
         organization_guid: org.guid,
         space_guid: space.guid,
         service_instance_type: 'managed_service_instance'
@@ -97,7 +98,7 @@ RSpec.describe 'Service Usage Snapshots' do
     end
     let!(:detail2) do
       VCAP::CloudController::ServiceUsageSnapshotDetail.make(
-        service_usage_snapshot: snapshot,
+        snapshot_id: snapshot.id,
         organization_guid: org.guid,
         space_guid: space.guid,
         service_instance_type: 'user_provided'
@@ -112,10 +113,10 @@ RSpec.describe 'Service Usage Snapshots' do
       expect(parsed_response['resources'].pluck('service_instance_guid')).to contain_exactly(detail1.service_instance_guid, detail2.service_instance_guid)
     end
 
-    it 'requires admin permissions' do
+    it 'returns 404 for non-admin users' do
       get "/v3/service_usage/snapshots/#{snapshot.guid}/details", nil, headers_for(user)
 
-      expect(last_response.status).to eq(403)
+      expect(last_response.status).to eq(404)
     end
 
     it 'returns 404 for non-existent snapshot' do

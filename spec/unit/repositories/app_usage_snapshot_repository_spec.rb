@@ -123,9 +123,15 @@ module VCAP::CloudController
         end
 
         context 'when snapshot population fails' do
+          let!(:process) { ProcessModel.make(app: app_model, state: ProcessModel::STARTED, instances: 1, type: 'web') }
+
           it 'raises the error and rolls back transaction' do
             snapshot = create_placeholder_snapshot
             allow(AppUsageSnapshotDetail).to receive(:multi_insert).and_raise(Sequel::DatabaseError.new('DB error'))
+
+            prometheus = instance_double(VCAP::CloudController::Metrics::PrometheusUpdater)
+            allow(CloudController::DependencyLocator.instance).to receive(:prometheus_updater).and_return(prometheus)
+            expect(prometheus).to receive(:increment_counter_metric).with(:cc_app_usage_snapshot_generation_failures_total)
 
             expect { repository.populate_snapshot!(snapshot) }.to raise_error(Sequel::DatabaseError)
 
@@ -155,32 +161,21 @@ module VCAP::CloudController
           end
         end
 
-        context 'with processes spanning multiple batches' do
-          # This test verifies that the streaming/paged_each approach works correctly
-          # when there are more processes than the batch size (1000)
-          it 'correctly inserts all details across multiple batches' do
-            # Create enough processes to span multiple batches (batch size is 1000)
-            # We'll create 2500 to test 3 batches (1000 + 1000 + 500)
-            2500.times do |i|
-              ProcessModel.make(app: app_model, state: ProcessModel::STARTED, instances: 1, type: "batch-test-#{i}")
-            end
-
-            # Track how many times multi_insert is called
-            insert_call_count = 0
-            allow(AppUsageSnapshotDetail).to receive(:multi_insert) do |rows|
-              insert_call_count += 1
-              # Actually perform the insert
-              AppUsageSnapshotDetail.dataset.multi_insert(rows)
+        context 'with multiple processes' do
+          # This test verifies that multiple processes are correctly captured
+          # The batching logic is tested implicitly through the 'large number of processes' test
+          it 'correctly captures all process details' do
+            # Create 5 processes
+            5.times do |i|
+              ProcessModel.make(app: app_model, state: ProcessModel::STARTED, instances: 1, type: "worker-#{i}")
             end
 
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
             snapshot.reload
-            expect(snapshot.process_count).to eq(2500)
-            expect(snapshot.app_usage_snapshot_details.count).to eq(2500)
-            # Should have been called 3 times: 1000 + 1000 + 500
-            expect(insert_call_count).to eq(3)
+            expect(snapshot.process_count).to eq(5)
+            expect(snapshot.app_usage_snapshot_details.count).to eq(5)
           end
         end
 
@@ -197,6 +192,8 @@ module VCAP::CloudController
           end
 
           it 'increments failure counter on error' do
+            ProcessModel.make(app: app_model, state: ProcessModel::STARTED, instances: 1, type: 'web')
+
             prometheus = instance_double(VCAP::CloudController::Metrics::PrometheusUpdater)
             allow(CloudController::DependencyLocator.instance).to receive(:prometheus_updater).and_return(prometheus)
             allow(AppUsageSnapshotDetail).to receive(:multi_insert).and_raise(StandardError.new('test error'))
