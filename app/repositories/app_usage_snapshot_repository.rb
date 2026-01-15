@@ -21,9 +21,11 @@ module VCAP::CloudController
 
           # Calculate summary counts using SQL aggregates (no full load into memory)
           # Use base query with table-qualified column names for counts
+          # NOTE: We use .unordered to remove ORDER BY before DISTINCT, which is required
+          # by PostgreSQL (ORDER BY columns must appear in SELECT list for DISTINCT)
           process_count = base_query.count
-          org_count = base_query.select(:"#{Organization.table_name}__guid").exclude("#{Organization.table_name}__guid": nil).distinct.count
-          space_count = base_query.select(:"#{Space.table_name}__guid").exclude("#{Space.table_name}__guid": nil).distinct.count
+          org_count = base_query.unordered.select(:"#{Organization.table_name}__guid").exclude("#{Organization.table_name}__guid": nil).distinct.count
+          space_count = base_query.unordered.select(:"#{Space.table_name}__guid").exclude("#{Space.table_name}__guid": nil).distinct.count
 
           # Update snapshot with actual data
           snapshot.update(
