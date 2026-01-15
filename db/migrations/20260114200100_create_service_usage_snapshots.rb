@@ -1,7 +1,7 @@
 Sequel.migration do
   up do
     create_table :service_usage_snapshots do
-      primary_key :id, type: :Bignum, name: :service_usage_snapshots_pk
+      primary_key :id, type: :Bignum
       String :guid, null: false, size: 255
       column :checkpoint_event_id, :Bignum, null: true
       Timestamp :checkpoint_event_created_at, null: true
@@ -18,7 +18,7 @@ Sequel.migration do
     end
 
     create_table :service_usage_snapshot_details do
-      primary_key :id, type: :Bignum, name: :service_usage_snapshot_details_pk
+      primary_key :id, type: :Bignum
       column :snapshot_id, :Bignum, null: false
       String :organization_guid, null: true, size: 255
       String :space_guid, null: true, size: 255

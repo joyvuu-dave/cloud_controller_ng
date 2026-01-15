@@ -902,7 +902,7 @@ module VCAP::CloudController
   end
 
   AppUsageSnapshotDetail.blueprint do
-    app_usage_snapshot { AppUsageSnapshot.make }
+    snapshot_id { AppUsageSnapshot.make.id }
     organization_guid { Sham.guid }
     space_guid { Sham.guid }
     app_guid { Sham.guid }
@@ -921,7 +921,7 @@ module VCAP::CloudController
   end
 
   ServiceUsageSnapshotDetail.blueprint do
-    service_usage_snapshot { ServiceUsageSnapshot.make }
+    snapshot_id { ServiceUsageSnapshot.make.id }
     organization_guid { Sham.guid }
     space_guid { Sham.guid }
     service_instance_guid { Sham.guid }

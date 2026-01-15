@@ -2,12 +2,20 @@ require 'spec_helper'
 
 module VCAP::CloudController
   RSpec.describe ServiceUsageSnapshotDetail do
-    subject(:detail) { ServiceUsageSnapshotDetail.make }
-
     describe 'associations' do
       it 'belongs to a service_usage_snapshot' do
         snapshot = ServiceUsageSnapshot.make
-        detail = ServiceUsageSnapshotDetail.make(service_usage_snapshot: snapshot)
+        snapshot.save
+
+        detail = ServiceUsageSnapshotDetail.new(
+          snapshot_id: snapshot.id,
+          organization_guid: 'org-guid',
+          space_guid: 'space-guid',
+          service_instance_guid: 'si-guid',
+          service_instance_name: 'si-name',
+          service_instance_type: 'managed_service_instance'
+        )
+        detail.save
 
         expect(detail.service_usage_snapshot).to eq(snapshot)
       end
@@ -15,39 +23,93 @@ module VCAP::CloudController
 
     describe 'validations' do
       it 'validates presence of snapshot_id' do
-        detail.snapshot_id = nil
-        expect(detail).not_to be_valid
-        expect(detail.errors[:snapshot_id]).to include("can't be blank")
+        detail = ServiceUsageSnapshotDetail.new(
+          organization_guid: 'org-guid',
+          space_guid: 'space-guid',
+          service_instance_guid: 'si-guid',
+          service_instance_name: 'si-name',
+          service_instance_type: 'managed_service_instance'
+        )
+        detail.validate
+        expect(detail.errors.on(:snapshot_id)).to eq([:presence])
       end
 
-      it 'validates presence of organization_guid' do
-        detail.organization_guid = nil
-        expect(detail).not_to be_valid
-        expect(detail.errors[:organization_guid]).to include("can't be blank")
+      it 'allows nil organization_guid (for deleted orgs)' do
+        snapshot = ServiceUsageSnapshot.make
+        snapshot.save
+
+        detail = ServiceUsageSnapshotDetail.new(
+          snapshot_id: snapshot.id,
+          organization_guid: nil,
+          space_guid: 'space-guid',
+          service_instance_guid: 'si-guid',
+          service_instance_name: 'si-name',
+          service_instance_type: 'managed_service_instance'
+        )
+        expect(detail).to be_valid
       end
 
-      it 'validates presence of space_guid' do
-        detail.space_guid = nil
-        expect(detail).not_to be_valid
-        expect(detail.errors[:space_guid]).to include("can't be blank")
+      it 'allows nil space_guid (for deleted spaces)' do
+        snapshot = ServiceUsageSnapshot.make
+        snapshot.save
+
+        detail = ServiceUsageSnapshotDetail.new(
+          snapshot_id: snapshot.id,
+          organization_guid: 'org-guid',
+          space_guid: nil,
+          service_instance_guid: 'si-guid',
+          service_instance_name: 'si-name',
+          service_instance_type: 'managed_service_instance'
+        )
+        expect(detail).to be_valid
       end
 
       it 'validates presence of service_instance_guid' do
-        detail.service_instance_guid = nil
-        expect(detail).not_to be_valid
-        expect(detail.errors[:service_instance_guid]).to include("can't be blank")
+        snapshot = ServiceUsageSnapshot.make
+        snapshot.save
+
+        detail = ServiceUsageSnapshotDetail.new(
+          snapshot_id: snapshot.id,
+          organization_guid: 'org-guid',
+          space_guid: 'space-guid',
+          service_instance_guid: nil,
+          service_instance_name: 'si-name',
+          service_instance_type: 'managed_service_instance'
+        )
+        detail.validate
+        expect(detail.errors.on(:service_instance_guid)).to eq([:presence])
       end
 
       it 'validates presence of service_instance_name' do
-        detail.service_instance_name = nil
-        expect(detail).not_to be_valid
-        expect(detail.errors[:service_instance_name]).to include("can't be blank")
+        snapshot = ServiceUsageSnapshot.make
+        snapshot.save
+
+        detail = ServiceUsageSnapshotDetail.new(
+          snapshot_id: snapshot.id,
+          organization_guid: 'org-guid',
+          space_guid: 'space-guid',
+          service_instance_guid: 'si-guid',
+          service_instance_name: nil,
+          service_instance_type: 'managed_service_instance'
+        )
+        detail.validate
+        expect(detail.errors.on(:service_instance_name)).to eq([:presence])
       end
 
       it 'validates presence of service_instance_type' do
-        detail.service_instance_type = nil
-        expect(detail).not_to be_valid
-        expect(detail.errors[:service_instance_type]).to include("can't be blank")
+        snapshot = ServiceUsageSnapshot.make
+        snapshot.save
+
+        detail = ServiceUsageSnapshotDetail.new(
+          snapshot_id: snapshot.id,
+          organization_guid: 'org-guid',
+          space_guid: 'space-guid',
+          service_instance_guid: 'si-guid',
+          service_instance_name: 'si-name',
+          service_instance_type: nil
+        )
+        detail.validate
+        expect(detail.errors.on(:service_instance_type)).to eq([:presence])
       end
     end
   end

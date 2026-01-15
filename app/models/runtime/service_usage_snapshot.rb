@@ -1,5 +1,7 @@
 module VCAP::CloudController
   class ServiceUsageSnapshot < Sequel::Model(:service_usage_snapshots)
+    plugin :after_initialize
+
     one_to_many :service_usage_snapshot_details,
                 class: 'VCAP::CloudController::ServiceUsageSnapshotDetail',
                 key: :snapshot_id,
@@ -22,7 +24,7 @@ module VCAP::CloudController
       validates_presence :space_count
     end
 
-    def before_create
+    def after_initialize
       super
       self.guid ||= SecureRandom.uuid
     end

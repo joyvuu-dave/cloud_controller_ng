@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'repositories/service_usage_snapshot_repository'
 
 module VCAP::CloudController
   module Repositories
