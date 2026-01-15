@@ -46,9 +46,7 @@ module VCAP::CloudController
             links[:job] = { href: url_builder.build_url(path: "/v3/jobs/#{pollable_job.guid}") } if pollable_job
           end
 
-          if snapshot.checkpoint_event_id && snapshot.checkpoint_event_id > 0
-            links[:checkpoint_event] = { href: url_builder.build_url(path: "/v3/service_usage_events/#{snapshot.checkpoint_event_id}") }
-          end
+          links[:checkpoint_event] = { href: url_builder.build_url(path: "/v3/service_usage_events/#{snapshot.checkpoint_event_id}") } if snapshot.checkpoint_event_id.present?
 
           links
         end

@@ -406,14 +406,6 @@ curl "https://api.example.org/v3/service_usage_events/98765" \
 
 If an organization or space is deleted while a service instance still exists, the snapshot will still capture that instance. The `organization_guid` and `space_guid` fields may be NULL in this case. This is intentional - billing systems should still account for orphaned service instances.
 
-### Verifying Snapshot Integrity
-
-Each snapshot provides an `integrity_valid?` check that verifies:
-1. The snapshot has completed (not stuck in processing)
-2. The number of detail records matches the expected count
-
-Billing consumers should verify integrity before trusting snapshot data. See the App Usage Snapshots documentation for detailed usage examples.
-
 ## Cleanup and Retention
 
 **Automatic Cleanup:**
@@ -468,9 +460,37 @@ curl "https://api.example.org/v3/service_usage/snapshots" \
 - `cc.background.service-usage-snapshot-generator`: Job execution
 - `cc.background.service-usage-snapshots-cleanup`: Cleanup job
 
+## Design Decisions
+
+This section documents intentional design choices made during implementation.
+
+### Stale Snapshot Cleanup Timeout (1 Hour)
+
+The cleanup job considers snapshots "stale" if they've been processing for more than 1 hour without completing. This timeout was chosen because:
+- Normal snapshot generation completes within minutes, even for very large foundations
+- 1 hour provides ample buffer for slow systems or database contention
+- It's short enough to not block new snapshot requests indefinitely
+- It aligns with similar timeout patterns elsewhere in the codebase
+
+### Checkpoint Event May Be Pruned
+
+The `checkpoint_event_id` stored in a snapshot may point to an event that has since been pruned (events are pruned after 30 days by default). This is intentional:
+- The checkpoint represents a point-in-time reference, not a guarantee the event still exists
+- Billing consumers should create new snapshots before their checkpoint events are pruned
+- The `checkpoint_event_created_at` timestamp provides an additional reference point for validation
+
+**Recommendation:** Create snapshots more frequently than the pruning window (e.g., weekly) to ensure you always have a valid checkpoint.
+
+### Pagination Limits
+
+The snapshot details endpoint uses the standard Cloud Controller pagination via `SequelPaginator`. The default and maximum page sizes are enforced by the paginator, consistent with all other V3 list endpoints. This ensures:
+- Consistent behavior across all APIs
+- Protection against unbounded queries
+- Predictable memory usage
+
 ## Related Documentation
 
-- [App Usage Snapshots](USAGE_SNAPSHOTS.md): Parallel feature for app usage events
+- [App Usage Snapshots](APP_USAGE_SNAPSHOTS.md): Parallel feature for app usage events
 - [Service Usage Events API](https://v3-apidocs.cloudfoundry.org/version/3.x.x/index.html#service-usage-events): Event stream API
 
 ## Implementation Notes

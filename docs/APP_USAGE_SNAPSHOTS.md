@@ -392,40 +392,6 @@ Usage events are pruned after 30 days. If your snapshot's `checkpoint_event` lin
 
 **Tip:** Create snapshots more frequently than the 30-day pruning window to ensure you always have a valid checkpoint to fall back to.
 
-### Verifying Snapshot Integrity
-
-Each snapshot provides an `integrity_valid?` check that verifies:
-1. The snapshot has completed (not stuck in processing)
-2. The number of detail records matches the expected count
-
-Billing consumers should verify integrity before trusting snapshot data:
-
-```ruby
-snapshot = fetch_snapshot(guid)
-
-if snapshot.processing?
-  # Still generating, wait and retry
-  sleep(30)
-  retry
-elsif !snapshot.integrity_valid?
-  # Something went wrong, request a new snapshot
-  log.error("Snapshot #{guid} failed integrity check")
-  request_new_snapshot
-else
-  # Safe to use for billing
-  process_snapshot_for_billing(snapshot)
-end
-```
-
-**What integrity_valid? catches:**
-- Partial failures where some batches inserted but not all
-- Snapshots stuck in processing state
-- Any mismatch between expected and actual detail count
-
-**What it doesn't catch:**
-- Logical errors in the query (wrong processes selected)
-- Data corruption within individual records
-
 ## Performance Characteristics
 
 **Expected snapshot generation times:**
@@ -478,6 +444,34 @@ curl "https://api.example.org/v3/app_usage/snapshots" \
 ```
 
 **Deprecation Notice:** The `destructively_purge_all_and_reseed` endpoint is now deprecated. Please use app usage snapshots instead. The old endpoint will be removed in a future major version.
+
+## Design Decisions
+
+This section documents intentional design choices made during implementation.
+
+### Stale Snapshot Cleanup Timeout (1 Hour)
+
+The cleanup job considers snapshots "stale" if they've been processing for more than 1 hour without completing. This timeout was chosen because:
+- Normal snapshot generation completes within minutes, even for very large foundations
+- 1 hour provides ample buffer for slow systems or database contention
+- It's short enough to not block new snapshot requests indefinitely
+- It aligns with similar timeout patterns elsewhere in the codebase
+
+### Checkpoint Event May Be Pruned
+
+The `checkpoint_event_id` stored in a snapshot may point to an event that has since been pruned (events are pruned after 30 days by default). This is intentional:
+- The checkpoint represents a point-in-time reference, not a guarantee the event still exists
+- Billing consumers should create new snapshots before their checkpoint events are pruned
+- The `checkpoint_event_created_at` timestamp provides an additional reference point for validation
+
+**Recommendation:** Create snapshots more frequently than the pruning window (e.g., weekly) to ensure you always have a valid checkpoint.
+
+### Pagination Limits
+
+The snapshot details endpoint uses the standard Cloud Controller pagination via `SequelPaginator`. The default and maximum page sizes are enforced by the paginator, consistent with all other V3 list endpoints. This ensures:
+- Consistent behavior across all APIs
+- Protection against unbounded queries
+- Predictable memory usage
 
 ## Support
 

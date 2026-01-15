@@ -75,7 +75,7 @@ class AppUsageSnapshotsController < ApplicationController
     # as "in progress" by having completed_at = NULL.
     snapshot = AppUsageSnapshot.create(
       guid: SecureRandom.uuid,
-      checkpoint_event_id: 0,
+      checkpoint_event_id: nil,
       created_at: Time.now.utc,
       completed_at: nil,
       process_count: 0,
@@ -83,8 +83,14 @@ class AppUsageSnapshotsController < ApplicationController
       space_count: 0
     )
 
-    job = Jobs::Runtime::AppUsageSnapshotGeneratorJob.new(snapshot.guid)
-    pollable_job = Jobs::Enqueuer.new(queue: Jobs::Queues.generic).enqueue_pollable(job)
+    begin
+      job = Jobs::Runtime::AppUsageSnapshotGeneratorJob.new(snapshot.guid)
+      pollable_job = Jobs::Enqueuer.new(queue: Jobs::Queues.generic).enqueue_pollable(job)
+    rescue StandardError
+      # If job enqueue fails, delete the orphaned snapshot to avoid blocking future requests
+      snapshot.destroy
+      raise
+    end
 
     head :accepted, 'Location' => url_builder.build_url(path: "/v3/jobs/#{pollable_job.guid}")
   end

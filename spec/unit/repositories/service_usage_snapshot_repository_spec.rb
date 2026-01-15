@@ -15,7 +15,7 @@ module VCAP::CloudController
       def create_placeholder_snapshot
         ServiceUsageSnapshot.create(
           guid: SecureRandom.uuid,
-          checkpoint_event_id: 0,
+          checkpoint_event_id: nil,
           created_at: Time.now.utc,
           completed_at: nil,
           service_instance_count: 0,

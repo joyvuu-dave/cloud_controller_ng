@@ -30,14 +30,14 @@ RSpec.describe 'App Usage Snapshots' do
 
         expect(last_response.status).to eq(200)
         job_response = Oj.load(last_response.body)
-        expect(job_response['operation']).to eq('usage_snapshot.generate')
+        expect(job_response['operation']).to eq('app_usage_snapshot.generate')
       end
 
       context 'when a snapshot is already in progress' do
         before do
           VCAP::CloudController::AppUsageSnapshot.create(
             guid: 'in-progress-snapshot',
-            checkpoint_event_id: 0,
+            checkpoint_event_id: nil,
             created_at: Time.now.utc,
             completed_at: nil,
             process_count: 0,

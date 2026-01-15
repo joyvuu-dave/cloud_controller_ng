@@ -3,7 +3,7 @@ Sequel.migration do
     create_table :app_usage_snapshots do
       primary_key :id, type: :Bignum, name: :app_usage_snapshots_pk
       String :guid, null: false, size: 255
-      column :checkpoint_event_id, :Bignum, null: false
+      column :checkpoint_event_id, :Bignum, null: true
       Timestamp :checkpoint_event_created_at, null: true
       Timestamp :created_at, null: false, default: Sequel::CURRENT_TIMESTAMP
       Timestamp :completed_at, null: true
@@ -20,8 +20,8 @@ Sequel.migration do
     create_table :app_usage_snapshot_details do
       primary_key :id, type: :Bignum, name: :app_usage_snapshot_details_pk
       column :snapshot_id, :Bignum, null: false
-      String :organization_guid, null: false, size: 255
-      String :space_guid, null: false, size: 255
+      String :organization_guid, null: true, size: 255
+      String :space_guid, null: true, size: 255
       String :app_guid, null: false, size: 255
       String :process_guid, null: false, size: 255
       String :process_type, null: false, size: 255

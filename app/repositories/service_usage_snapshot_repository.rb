@@ -12,7 +12,7 @@ module VCAP::CloudController
         DB.transaction do
           # Get checkpoint - the most recent usage event at this moment
           checkpoint_event = ServiceUsageEvent.order(Sequel.desc(:id)).first
-          checkpoint_event_id = checkpoint_event&.id || 0
+          checkpoint_event_id = checkpoint_event&.id
           checkpoint_event_created_at = checkpoint_event&.created_at
 
           # Build query for service instances (with LEFT JOIN for deleted orgs/spaces and user-provided services)
@@ -37,12 +37,15 @@ module VCAP::CloudController
           insert_snapshot_details(snapshot.id, service_instances)
 
           # Mark complete
-          # Note: We call Time.now.utc multiple times (for created_at and completed_at).
+          # NOTE: We call Time.now.utc multiple times (for created_at and completed_at).
           # In theory, clock adjustments could cause completed_at < created_at, but this
           # is extremely rare and doesn't affect functionality. The timestamps are for
           # informational purposes, not ordering guarantees.
           snapshot.update(completed_at: Time.now.utc)
         end
+
+        # Reload to ensure in-memory object reflects DB state after transaction
+        snapshot.reload
 
         # Metrics recorded after successful transaction commit
         duration = Time.now - start_time
