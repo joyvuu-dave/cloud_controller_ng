@@ -891,4 +891,38 @@ module VCAP::CloudController
 
   TestModelRedact.blueprint do
   end
+
+  AppUsageSnapshot.blueprint do
+    guid { Sham.guid }
+    checkpoint_event_id { 0 }
+    created_at { Time.now.utc }
+    instance_count { 0 }
+    organization_count { 0 }
+    space_count { 0 }
+  end
+
+  AppUsageSnapshotSpace.blueprint do
+    app_usage_snapshot { AppUsageSnapshot.make }
+    space_guid { Sham.guid }
+    organization_guid { Sham.guid }
+    instance_count { 0 }
+    processes { [] }
+  end
+
+  ServiceUsageSnapshot.blueprint do
+    guid { Sham.guid }
+    checkpoint_event_id { 0 }
+    created_at { Time.now.utc }
+    service_instance_count { 0 }
+    organization_count { 0 }
+    space_count { 0 }
+  end
+
+  ServiceUsageSnapshotSpace.blueprint do
+    service_usage_snapshot { ServiceUsageSnapshot.make }
+    space_guid { Sham.guid }
+    organization_guid { Sham.guid }
+    service_instance_count { 0 }
+    service_instances { [] }
+  end
 end

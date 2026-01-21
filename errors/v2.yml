@@ -1403,3 +1403,33 @@
   name: CNBRestoreFailed            
   http_code: 400
   message: "cnb: restore failed"
+
+440001:
+  name: AppUsageSnapshotGenerationInProgress
+  http_code: 409
+  message: "An app usage snapshot is already being generated. Please wait for it to complete."
+
+440002:
+  name: AppUsageSnapshotNotFound
+  http_code: 404
+  message: "App usage snapshot not found. Ensure it exists and you have access to it."
+
+440003:
+  name: AppUsageSnapshotGenerationFailed
+  http_code: 500
+  message: "Snapshot generation failed. Please try again or contact support."
+
+440004:
+  name: ServiceUsageSnapshotGenerationInProgress
+  http_code: 409
+  message: "A service usage snapshot is already being generated. Please wait for it to complete."
+
+440005:
+  name: ServiceUsageSnapshotNotFound
+  http_code: 404
+  message: "Service usage snapshot not found. Ensure it exists and you have access to it."
+
+440006:
+  name: ServiceUsageSnapshotGenerationFailed
+  http_code: 500
+  message: "Service snapshot generation failed. Please try again or contact support."

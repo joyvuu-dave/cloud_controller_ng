@@ -333,6 +333,18 @@ Rails.application.routes.draw do
   get '/service_usage_events', to: 'service_usage_events#index'
   post '/service_usage_events/actions/destructively_purge_all_and_reseed', to: 'service_usage_events#destructively_purge_all_and_reseed'
 
+  # app usage snapshots
+  get '/app_usage/snapshots', to: 'app_usage_snapshots#index'
+  post '/app_usage/snapshots', to: 'app_usage_snapshots#create'
+  get '/app_usage/snapshots/:guid', to: 'app_usage_snapshots#show'
+  get '/app_usage/snapshots/:guid/spaces', to: 'app_usage_snapshots#spaces'
+
+  # service usage snapshots
+  get '/service_usage/snapshots', to: 'service_usage_snapshots#index'
+  post '/service_usage/snapshots', to: 'service_usage_snapshots#create'
+  get '/service_usage/snapshots/:guid', to: 'service_usage_snapshots#show'
+  get '/service_usage/snapshots/:guid/spaces', to: 'service_usage_snapshots#spaces'
+
   # environment variable groups
   get '/environment_variable_groups/:name', to: 'environment_variable_groups#show'
   patch '/environment_variable_groups/:name', to: 'environment_variable_groups#update'
