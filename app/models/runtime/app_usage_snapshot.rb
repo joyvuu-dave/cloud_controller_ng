@@ -2,7 +2,7 @@ module VCAP::CloudController
   class AppUsageSnapshot < Sequel::Model(:app_usage_snapshots)
     plugin :after_initialize
 
-    one_to_many :app_usage_snapshot_spaces
+    one_to_many :app_usage_snapshot_chunks
 
     def validate
       super
@@ -14,6 +14,8 @@ module VCAP::CloudController
       validates_presence :instance_count
       validates_presence :organization_count
       validates_presence :space_count
+      validates_presence :process_count
+      validates_presence :chunk_count
     end
 
     def after_initialize

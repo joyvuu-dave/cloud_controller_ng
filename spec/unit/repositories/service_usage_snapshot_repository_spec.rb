@@ -21,7 +21,8 @@ module VCAP::CloudController
           completed_at: nil,
           service_instance_count: 0,
           organization_count: 0,
-          space_count: 0
+          space_count: 0,
+          chunk_count: 0
         )
       end
 
@@ -38,21 +39,23 @@ module VCAP::CloudController
             expect(snapshot.service_instance_count).to eq(2)
             expect(snapshot.organization_count).to eq(1)
             expect(snapshot.space_count).to eq(1)
+            expect(snapshot.chunk_count).to eq(1)
             expect(snapshot.completed_at).not_to be_nil
           end
 
-          it 'creates space records with service instance details' do
+          it 'creates chunk records with service instance details' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
-            expect(snapshot.service_usage_snapshot_spaces.count).to eq(1)
-            space_record = snapshot.service_usage_snapshot_spaces.first
+            expect(snapshot.service_usage_snapshot_chunks.count).to eq(1)
+            chunk = snapshot.service_usage_snapshot_chunks.first
 
-            expect(space_record.space_guid).to eq(space.guid)
-            expect(space_record.organization_guid).to eq(org.guid)
-            expect(space_record.service_instance_count).to eq(2)
-            expect(space_record.service_instances.size).to eq(2)
-            expect(space_record.service_instances).to include(
+            expect(chunk.space_guid).to eq(space.guid)
+            expect(chunk.organization_guid).to eq(org.guid)
+            expect(chunk.chunk_index).to eq(0)
+            expect(chunk.service_instance_count).to eq(2)
+            expect(chunk.service_instances.size).to eq(2)
+            expect(chunk.service_instances).to include(
               hash_including('guid' => instance1.guid, 'type' => 'managed'),
               hash_including('guid' => instance2.guid, 'type' => 'managed')
             )
@@ -83,12 +86,12 @@ module VCAP::CloudController
             expect(snapshot.service_instance_count).to eq(1)
           end
 
-          it 'marks user-provided instances correctly in space records' do
+          it 'marks user-provided instances correctly in chunk records' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
-            space_record = snapshot.service_usage_snapshot_spaces.first
-            expect(space_record.service_instances.first['type']).to eq('user_provided')
+            chunk = snapshot.service_usage_snapshot_chunks.first
+            expect(chunk.service_instances.first['type']).to eq('user_provided')
           end
         end
 
@@ -104,12 +107,12 @@ module VCAP::CloudController
             expect(snapshot.service_instance_count).to eq(2)
           end
 
-          it 'includes both types in space record' do
+          it 'includes both types in chunk record' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
-            space_record = snapshot.service_usage_snapshot_spaces.first
-            types = space_record.service_instances.pluck('type')
+            chunk = snapshot.service_usage_snapshot_chunks.first
+            types = chunk.service_instances.pluck('type')
             expect(types).to contain_exactly('managed', 'user_provided')
           end
         end
@@ -126,33 +129,34 @@ module VCAP::CloudController
             ManagedServiceInstance.make(space: space3, service_plan: service_plan)
           end
 
-          it 'creates one space record per space' do
+          it 'creates one chunk per space' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
-            expect(snapshot.service_usage_snapshot_spaces.count).to eq(3)
+            expect(snapshot.service_usage_snapshot_chunks.count).to eq(3)
             expect(snapshot.service_instance_count).to eq(4)
             expect(snapshot.organization_count).to eq(2)
             expect(snapshot.space_count).to eq(3)
+            expect(snapshot.chunk_count).to eq(3)
           end
 
           it 'groups service instances by space correctly' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
-            space_records = snapshot.service_usage_snapshot_spaces.to_a
-            space1_record = space_records.find { |r| r.space_guid == space.guid }
-            space2_record = space_records.find { |r| r.space_guid == space2.guid }
-            space3_record = space_records.find { |r| r.space_guid == space3.guid }
+            chunks = snapshot.service_usage_snapshot_chunks.to_a
+            space1_chunk = chunks.find { |c| c.space_guid == space.guid }
+            space2_chunk = chunks.find { |c| c.space_guid == space2.guid }
+            space3_chunk = chunks.find { |c| c.space_guid == space3.guid }
 
-            expect(space1_record.service_instance_count).to eq(1)
-            expect(space2_record.service_instance_count).to eq(2)
-            expect(space3_record.service_instance_count).to eq(1)
+            expect(space1_chunk.service_instance_count).to eq(1)
+            expect(space2_chunk.service_instance_count).to eq(2)
+            expect(space3_chunk.service_instance_count).to eq(1)
           end
         end
 
         context 'when there are no service instances' do
-          it 'populates snapshot with zero counts and no space records' do
+          it 'populates snapshot with zero counts and no chunks' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
@@ -160,7 +164,8 @@ module VCAP::CloudController
             expect(snapshot.service_instance_count).to eq(0)
             expect(snapshot.organization_count).to eq(0)
             expect(snapshot.space_count).to eq(0)
-            expect(snapshot.service_usage_snapshot_spaces.count).to eq(0)
+            expect(snapshot.chunk_count).to eq(0)
+            expect(snapshot.service_usage_snapshot_chunks.count).to eq(0)
             expect(snapshot.completed_at).not_to be_nil
           end
         end

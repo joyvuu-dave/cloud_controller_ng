@@ -1,5 +1,5 @@
 require 'presenters/v3/app_usage_snapshot_presenter'
-require 'presenters/v3/app_usage_snapshot_space_presenter'
+require 'presenters/v3/app_usage_snapshot_chunk_presenter'
 require 'messages/app_usage_snapshots_create_message'
 require 'messages/app_usage_snapshots_list_message'
 require 'fetchers/app_usage_snapshot_list_fetcher'
@@ -57,7 +57,9 @@ class AppUsageSnapshotsController < ApplicationController
       completed_at: nil,
       instance_count: 0,
       organization_count: 0,
-      space_count: 0
+      space_count: 0,
+      process_count: 0,
+      chunk_count: 0
     )
 
     begin
@@ -72,26 +74,26 @@ class AppUsageSnapshotsController < ApplicationController
     head :accepted, 'Location' => url_builder.build_url(path: "/v3/jobs/#{pollable_job.guid}")
   end
 
-  def spaces
+  def chunks
     # Return 404 for non-admin users
     snapshot_not_found! unless permission_queryer.can_read_globally?
 
     snapshot = AppUsageSnapshot.first(guid: hashed_params[:guid])
     snapshot_not_found! unless snapshot
 
-    # Only show spaces for completed snapshots
+    # Only show chunks for completed snapshots
     unprocessable!('Snapshot is still processing') unless snapshot.complete?
 
     pagination_options = PaginationOptions.from_params(query_params)
     paginated_result = SequelPaginator.new.get_page(
-      snapshot.app_usage_snapshot_spaces_dataset,
+      snapshot.app_usage_snapshot_chunks_dataset,
       pagination_options
     )
 
     render status: :ok, json: Presenters::V3::PaginatedListPresenter.new(
-      presenter: Presenters::V3::AppUsageSnapshotSpacePresenter,
+      presenter: Presenters::V3::AppUsageSnapshotChunkPresenter,
       paginated_result: paginated_result,
-      path: "/v3/app_usage/snapshots/#{snapshot.guid}/spaces"
+      path: "/v3/app_usage/snapshots/#{snapshot.guid}/chunks"
     )
   end
 

@@ -1,5 +1,5 @@
 module VCAP::CloudController
-  class AppUsageSnapshotSpace < Sequel::Model(:app_usage_snapshot_spaces)
+  class AppUsageSnapshotChunk < Sequel::Model(:app_usage_snapshot_chunks)
     plugin :serialization
 
     many_to_one :app_usage_snapshot
@@ -9,8 +9,10 @@ module VCAP::CloudController
     def validate
       super
       validates_presence :app_usage_snapshot_id
-      validates_presence :space_guid
       validates_presence :organization_guid
+      validates_presence :space_guid
+      validates_presence :chunk_index
+      validates_presence :process_count
       validates_presence :instance_count
     end
   end

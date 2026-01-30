@@ -3,12 +3,12 @@ require 'spec_helper'
 module VCAP::CloudController
   RSpec.describe ServiceUsageSnapshot do
     describe 'associations' do
-      it 'has many service_usage_snapshot_spaces' do
+      it 'has many service_usage_snapshot_chunks' do
         snapshot = ServiceUsageSnapshot.make
-        space1 = ServiceUsageSnapshotSpace.make(service_usage_snapshot: snapshot, space_guid: 'space-1')
-        space2 = ServiceUsageSnapshotSpace.make(service_usage_snapshot: snapshot, space_guid: 'space-2')
+        chunk1 = ServiceUsageSnapshotChunk.make(service_usage_snapshot: snapshot, space_guid: 'space-1', chunk_index: 0)
+        chunk2 = ServiceUsageSnapshotChunk.make(service_usage_snapshot: snapshot, space_guid: 'space-2', chunk_index: 0)
 
-        expect(snapshot.service_usage_snapshot_spaces).to contain_exactly(space1, space2)
+        expect(snapshot.service_usage_snapshot_chunks).to contain_exactly(chunk1, chunk2)
       end
     end
 
@@ -18,7 +18,8 @@ module VCAP::CloudController
           created_at: Time.now.utc,
           service_instance_count: 0,
           organization_count: 0,
-          space_count: 0
+          space_count: 0,
+          chunk_count: 0
         )
         snapshot.guid = nil
         snapshot.validate
@@ -36,11 +37,25 @@ module VCAP::CloudController
           guid: SecureRandom.uuid,
           service_instance_count: 0,
           organization_count: 0,
-          space_count: 0
+          space_count: 0,
+          chunk_count: 0
         )
         snapshot.created_at = nil
         snapshot.validate
         expect(snapshot.errors.on(:created_at)).to eq([:presence])
+      end
+
+      it 'validates presence of chunk_count' do
+        snapshot = ServiceUsageSnapshot.new(
+          guid: SecureRandom.uuid,
+          created_at: Time.now.utc,
+          service_instance_count: 0,
+          organization_count: 0,
+          space_count: 0
+        )
+        snapshot.chunk_count = nil
+        snapshot.validate
+        expect(snapshot.errors.on(:chunk_count)).to eq([:presence])
       end
     end
 
@@ -51,7 +66,8 @@ module VCAP::CloudController
           created_at: Time.now.utc,
           service_instance_count: 0,
           organization_count: 0,
-          space_count: 0
+          space_count: 0,
+          chunk_count: 0
         )
         expect(snapshot.guid).not_to be_nil
         expect(snapshot.guid).to match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)

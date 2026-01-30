@@ -84,7 +84,7 @@ RSpec.describe 'Service Usage Snapshots' do
     end
   end
 
-  describe 'GET /v3/service_usage/snapshots/:guid/spaces' do
+  describe 'GET /v3/service_usage/snapshots/:guid/chunks' do
     let!(:snapshot) do
       VCAP::CloudController::ServiceUsageSnapshot.create(
         guid: 'test-service-snapshot-guid',
@@ -94,15 +94,17 @@ RSpec.describe 'Service Usage Snapshots' do
         completed_at: Time.now.utc - 59.minutes,
         service_instance_count: 5,
         organization_count: 2,
-        space_count: 2
+        space_count: 2,
+        chunk_count: 2
       )
     end
 
-    let!(:space1) do
-      VCAP::CloudController::ServiceUsageSnapshotSpace.create(
+    let!(:chunk1) do
+      VCAP::CloudController::ServiceUsageSnapshotChunk.create(
         service_usage_snapshot_id: snapshot.id,
-        space_guid: 'space-1-guid',
         organization_guid: 'org-1-guid',
+        space_guid: 'space-1-guid',
+        chunk_index: 0,
         service_instance_count: 3,
         service_instances: [
           { 'guid' => 'si-1', 'name' => 'my-db', 'type' => 'managed' },
@@ -112,11 +114,12 @@ RSpec.describe 'Service Usage Snapshots' do
       )
     end
 
-    let!(:space2) do
-      VCAP::CloudController::ServiceUsageSnapshotSpace.create(
+    let!(:chunk2) do
+      VCAP::CloudController::ServiceUsageSnapshotChunk.create(
         service_usage_snapshot_id: snapshot.id,
-        space_guid: 'space-2-guid',
         organization_guid: 'org-2-guid',
+        space_guid: 'space-2-guid',
+        chunk_index: 0,
         service_instance_count: 2,
         service_instances: [
           { 'guid' => 'si-4', 'name' => 'other-db', 'type' => 'managed' },
@@ -126,27 +129,28 @@ RSpec.describe 'Service Usage Snapshots' do
     end
 
     context 'when the user is an admin' do
-      it 'returns the space details for the snapshot' do
-        get "/v3/service_usage/snapshots/#{snapshot.guid}/spaces", nil, admin_header
+      it 'returns the chunk details for the snapshot' do
+        get "/v3/service_usage/snapshots/#{snapshot.guid}/chunks", nil, admin_header
 
         expect(last_response.status).to eq(200)
         expect(parsed_response['resources'].length).to eq(2)
         expect(parsed_response['resources'].pluck('space_guid')).to contain_exactly('space-1-guid', 'space-2-guid')
       end
 
-      it 'includes service instance details in each space record' do
-        get "/v3/service_usage/snapshots/#{snapshot.guid}/spaces", nil, admin_header
+      it 'includes service instance details in each chunk record' do
+        get "/v3/service_usage/snapshots/#{snapshot.guid}/chunks", nil, admin_header
 
         expect(last_response.status).to eq(200)
-        space1_response = parsed_response['resources'].find { |r| r['space_guid'] == 'space-1-guid' }
+        chunk1_response = parsed_response['resources'].find { |r| r['space_guid'] == 'space-1-guid' }
 
-        expect(space1_response['organization_guid']).to eq('org-1-guid')
-        expect(space1_response['service_instance_count']).to eq(3)
-        expect(space1_response['service_instances'].length).to eq(3)
+        expect(chunk1_response['organization_guid']).to eq('org-1-guid')
+        expect(chunk1_response['chunk_index']).to eq(0)
+        expect(chunk1_response['service_instance_count']).to eq(3)
+        expect(chunk1_response['service_instances'].length).to eq(3)
       end
 
       it 'supports pagination' do
-        get "/v3/service_usage/snapshots/#{snapshot.guid}/spaces?per_page=1", nil, admin_header
+        get "/v3/service_usage/snapshots/#{snapshot.guid}/chunks?per_page=1", nil, admin_header
 
         expect(last_response.status).to eq(200)
         expect(parsed_response['resources'].length).to eq(1)
@@ -163,12 +167,13 @@ RSpec.describe 'Service Usage Snapshots' do
           completed_at: nil,
           service_instance_count: 0,
           organization_count: 0,
-          space_count: 0
+          space_count: 0,
+          chunk_count: 0
         )
       end
 
       it 'returns 422 Unprocessable Entity' do
-        get "/v3/service_usage/snapshots/#{processing_snapshot.guid}/spaces", nil, admin_header
+        get "/v3/service_usage/snapshots/#{processing_snapshot.guid}/chunks", nil, admin_header
 
         expect(last_response.status).to eq(422)
       end
@@ -176,7 +181,7 @@ RSpec.describe 'Service Usage Snapshots' do
 
     context 'when the snapshot does not exist' do
       it 'returns 404' do
-        get '/v3/service_usage/snapshots/does-not-exist/spaces', nil, admin_header
+        get '/v3/service_usage/snapshots/does-not-exist/chunks', nil, admin_header
 
         expect(last_response.status).to eq(404)
       end
@@ -184,7 +189,7 @@ RSpec.describe 'Service Usage Snapshots' do
 
     context 'when the user is not an admin' do
       it 'returns 404' do
-        get "/v3/service_usage/snapshots/#{snapshot.guid}/spaces", nil, headers_for(user)
+        get "/v3/service_usage/snapshots/#{snapshot.guid}/chunks", nil, headers_for(user)
 
         expect(last_response.status).to eq(404)
       end

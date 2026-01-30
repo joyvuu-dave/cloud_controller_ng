@@ -19,7 +19,9 @@ module VCAP::CloudController
           completed_at: nil,
           instance_count: 0,
           organization_count: 0,
-          space_count: 0
+          space_count: 0,
+          process_count: 0,
+          chunk_count: 0
         )
       end
 
@@ -29,29 +31,33 @@ module VCAP::CloudController
           let!(:process2) { ProcessModel.make(app: app_model, state: ProcessModel::STARTED, instances: 2, type: 'worker') }
           let!(:stopped_process) { ProcessModel.make(app: app_model, state: ProcessModel::STOPPED, instances: 1) }
 
-          it 'populates the snapshot with correct instance count (sum of instances, not process count)' do
+          it 'populates the snapshot with correct counts' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
             snapshot.reload
             # 3 instances (web) + 2 instances (worker) = 5 total instances
             expect(snapshot.instance_count).to eq(5)
+            expect(snapshot.process_count).to eq(2)
             expect(snapshot.organization_count).to eq(1)
             expect(snapshot.space_count).to eq(1)
+            expect(snapshot.chunk_count).to eq(1)
             expect(snapshot.completed_at).not_to be_nil
           end
 
-          it 'creates space records with process details' do
+          it 'creates chunk records with process details' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
-            expect(snapshot.app_usage_snapshot_spaces.count).to eq(1)
-            space_record = snapshot.app_usage_snapshot_spaces.first
+            expect(snapshot.app_usage_snapshot_chunks.count).to eq(1)
+            chunk = snapshot.app_usage_snapshot_chunks.first
 
-            expect(space_record.space_guid).to eq(space.guid)
-            expect(space_record.organization_guid).to eq(org.guid)
-            expect(space_record.instance_count).to eq(5)
-            expect(space_record.processes).to contain_exactly(
+            expect(chunk.space_guid).to eq(space.guid)
+            expect(chunk.organization_guid).to eq(org.guid)
+            expect(chunk.chunk_index).to eq(0)
+            expect(chunk.process_count).to eq(2)
+            expect(chunk.instance_count).to eq(5)
+            expect(chunk.processes).to contain_exactly(
               hash_including('app_guid' => app_model.guid, 'process_type' => 'web', 'instances' => 3),
               hash_including('app_guid' => app_model.guid, 'process_type' => 'worker', 'instances' => 2)
             )
@@ -70,7 +76,7 @@ module VCAP::CloudController
             expect(snapshot.checkpoint_event_created_at).to be_within(1.second).of(last_event.created_at)
           end
 
-          it 'excludes task and build processes from instance count' do
+          it 'excludes task and build processes from counts' do
             ProcessModel.make(app: app_model, state: ProcessModel::STARTED, instances: 10, type: 'TASK')
             ProcessModel.make(app: app_model, state: ProcessModel::STARTED, instances: 5, type: 'build')
 
@@ -78,8 +84,9 @@ module VCAP::CloudController
             repository.populate_snapshot!(snapshot)
 
             snapshot.reload
-            # Only web (3) + worker (2) = 5, excludes TASK (10) and build (5)
+            # Only web (3) + worker (2) = 5 instances, 2 processes
             expect(snapshot.instance_count).to eq(5)
+            expect(snapshot.process_count).to eq(2)
           end
         end
 
@@ -96,41 +103,72 @@ module VCAP::CloudController
             ProcessModel.make(app: app_model3, state: ProcessModel::STARTED, instances: 5, type: 'web')
           end
 
-          it 'creates one space record per space' do
+          it 'creates one chunk per space' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
-            expect(snapshot.app_usage_snapshot_spaces.count).to eq(3)
+            expect(snapshot.app_usage_snapshot_chunks.count).to eq(3)
             expect(snapshot.instance_count).to eq(10) # 2 + 3 + 5
+            expect(snapshot.process_count).to eq(3)
             expect(snapshot.organization_count).to eq(2)
             expect(snapshot.space_count).to eq(3)
+            expect(snapshot.chunk_count).to eq(3)
           end
 
           it 'groups processes by space correctly' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
-            space_records = snapshot.app_usage_snapshot_spaces.to_a
-            space1_record = space_records.find { |r| r.space_guid == space.guid }
-            space2_record = space_records.find { |r| r.space_guid == space2.guid }
-            space3_record = space_records.find { |r| r.space_guid == space3.guid }
+            chunks = snapshot.app_usage_snapshot_chunks.to_a
+            space1_chunk = chunks.find { |c| c.space_guid == space.guid }
+            space2_chunk = chunks.find { |c| c.space_guid == space2.guid }
+            space3_chunk = chunks.find { |c| c.space_guid == space3.guid }
 
-            expect(space1_record.instance_count).to eq(2)
-            expect(space2_record.instance_count).to eq(3)
-            expect(space3_record.instance_count).to eq(5)
+            expect(space1_chunk.instance_count).to eq(2)
+            expect(space2_chunk.instance_count).to eq(3)
+            expect(space3_chunk.instance_count).to eq(5)
+          end
+        end
+
+        context 'when a space has many processes (chunking test)' do
+          # Create more than CHUNK_LIMIT (100) processes in one space
+          before do
+            150.times do |i|
+              process_app = AppModel.make(space: space)
+              ProcessModel.make(app: process_app, state: ProcessModel::STARTED, instances: 1, type: 'web')
+            end
+          end
+
+          it 'creates multiple chunks for the same space' do
+            snapshot = create_placeholder_snapshot
+            repository.populate_snapshot!(snapshot)
+
+            # 150 processes should create 2 chunks (100 + 50)
+            expect(snapshot.app_usage_snapshot_chunks.count).to eq(2)
+            expect(snapshot.process_count).to eq(150)
+            expect(snapshot.instance_count).to eq(150)
+            expect(snapshot.chunk_count).to eq(2)
+
+            chunks = snapshot.app_usage_snapshot_chunks.order(:chunk_index).to_a
+            expect(chunks[0].chunk_index).to eq(0)
+            expect(chunks[0].process_count).to eq(100)
+            expect(chunks[1].chunk_index).to eq(1)
+            expect(chunks[1].process_count).to eq(50)
           end
         end
 
         context 'when there are no running processes' do
-          it 'populates snapshot with zero counts and no space records' do
+          it 'populates snapshot with zero counts and no chunks' do
             snapshot = create_placeholder_snapshot
             repository.populate_snapshot!(snapshot)
 
             snapshot.reload
             expect(snapshot.instance_count).to eq(0)
+            expect(snapshot.process_count).to eq(0)
             expect(snapshot.organization_count).to eq(0)
             expect(snapshot.space_count).to eq(0)
-            expect(snapshot.app_usage_snapshot_spaces.count).to eq(0)
+            expect(snapshot.chunk_count).to eq(0)
+            expect(snapshot.app_usage_snapshot_chunks.count).to eq(0)
             expect(snapshot.completed_at).not_to be_nil
           end
         end

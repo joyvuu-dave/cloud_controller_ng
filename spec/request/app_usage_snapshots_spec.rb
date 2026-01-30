@@ -42,7 +42,9 @@ RSpec.describe 'App Usage Snapshots' do
             completed_at: nil,
             instance_count: 0,
             organization_count: 0,
-            space_count: 0
+            space_count: 0,
+            process_count: 0,
+            chunk_count: 0
           )
         end
 
@@ -102,7 +104,9 @@ RSpec.describe 'App Usage Snapshots' do
         completed_at: Time.now.utc - 59.minutes,
         instance_count: 10,
         organization_count: 2,
-        space_count: 3
+        space_count: 3,
+        process_count: 5,
+        chunk_count: 3
       )
     end
 
@@ -117,13 +121,15 @@ RSpec.describe 'App Usage Snapshots' do
         checkpoint_event_created_at: iso8601,
         summary: {
           instance_count: 10,
+          process_count: 5,
           organization_count: 2,
-          space_count: 3
+          space_count: 3,
+          chunk_count: 3
         },
         links: {
           self: { href: /#{Regexp.escape("/v3/app_usage/snapshots/#{snapshot.guid}")}/ },
           checkpoint_event: { href: %r{/v3/app_usage_events/12345} },
-          spaces: { href: /#{Regexp.escape("/v3/app_usage/snapshots/#{snapshot.guid}/spaces")}/ }
+          chunks: { href: /#{Regexp.escape("/v3/app_usage/snapshots/#{snapshot.guid}/chunks")}/ }
         }
       }
     end
@@ -158,7 +164,9 @@ RSpec.describe 'App Usage Snapshots' do
         completed_at: Time.now.utc - 119.minutes,
         instance_count: 5,
         organization_count: 1,
-        space_count: 1
+        space_count: 1,
+        process_count: 2,
+        chunk_count: 1
       )
     end
 
@@ -171,7 +179,9 @@ RSpec.describe 'App Usage Snapshots' do
         completed_at: Time.now.utc - 59.minutes,
         instance_count: 10,
         organization_count: 2,
-        space_count: 2
+        space_count: 2,
+        process_count: 4,
+        chunk_count: 2
       )
     end
 
@@ -208,7 +218,7 @@ RSpec.describe 'App Usage Snapshots' do
     end
   end
 
-  describe 'GET /v3/app_usage/snapshots/:guid/spaces' do
+  describe 'GET /v3/app_usage/snapshots/:guid/chunks' do
     let!(:snapshot) do
       VCAP::CloudController::AppUsageSnapshot.create(
         guid: 'test-snapshot-guid',
@@ -218,15 +228,19 @@ RSpec.describe 'App Usage Snapshots' do
         completed_at: Time.now.utc - 59.minutes,
         instance_count: 15,
         organization_count: 2,
-        space_count: 2
+        space_count: 2,
+        process_count: 4,
+        chunk_count: 2
       )
     end
 
-    let!(:space1) do
-      VCAP::CloudController::AppUsageSnapshotSpace.create(
+    let!(:chunk1) do
+      VCAP::CloudController::AppUsageSnapshotChunk.create(
         app_usage_snapshot_id: snapshot.id,
-        space_guid: 'space-1-guid',
         organization_guid: 'org-1-guid',
+        space_guid: 'space-1-guid',
+        chunk_index: 0,
+        process_count: 2,
         instance_count: 10,
         processes: [
           { 'app_guid' => 'app-1', 'process_type' => 'web', 'instances' => 5 },
@@ -235,11 +249,13 @@ RSpec.describe 'App Usage Snapshots' do
       )
     end
 
-    let!(:space2) do
-      VCAP::CloudController::AppUsageSnapshotSpace.create(
+    let!(:chunk2) do
+      VCAP::CloudController::AppUsageSnapshotChunk.create(
         app_usage_snapshot_id: snapshot.id,
-        space_guid: 'space-2-guid',
         organization_guid: 'org-2-guid',
+        space_guid: 'space-2-guid',
+        chunk_index: 0,
+        process_count: 1,
         instance_count: 5,
         processes: [
           { 'app_guid' => 'app-2', 'process_type' => 'web', 'instances' => 5 }
@@ -248,8 +264,8 @@ RSpec.describe 'App Usage Snapshots' do
     end
 
     context 'when the user is an admin' do
-      it 'returns the space details for the snapshot' do
-        get "/v3/app_usage/snapshots/#{snapshot.guid}/spaces", nil, admin_header
+      it 'returns the chunk details for the snapshot' do
+        get "/v3/app_usage/snapshots/#{snapshot.guid}/chunks", nil, admin_header
 
         expect(last_response.status).to eq(200)
         response = Oj.load(last_response.body)
@@ -257,20 +273,22 @@ RSpec.describe 'App Usage Snapshots' do
         expect(response['resources'].pluck('space_guid')).to contain_exactly('space-1-guid', 'space-2-guid')
       end
 
-      it 'includes process details in each space record' do
-        get "/v3/app_usage/snapshots/#{snapshot.guid}/spaces", nil, admin_header
+      it 'includes process details in each chunk record' do
+        get "/v3/app_usage/snapshots/#{snapshot.guid}/chunks", nil, admin_header
 
         expect(last_response.status).to eq(200)
         response = Oj.load(last_response.body)
-        space1_response = response['resources'].find { |r| r['space_guid'] == 'space-1-guid' }
+        chunk1_response = response['resources'].find { |r| r['space_guid'] == 'space-1-guid' }
 
-        expect(space1_response['organization_guid']).to eq('org-1-guid')
-        expect(space1_response['instance_count']).to eq(10)
-        expect(space1_response['processes'].length).to eq(2)
+        expect(chunk1_response['organization_guid']).to eq('org-1-guid')
+        expect(chunk1_response['chunk_index']).to eq(0)
+        expect(chunk1_response['process_count']).to eq(2)
+        expect(chunk1_response['instance_count']).to eq(10)
+        expect(chunk1_response['processes'].length).to eq(2)
       end
 
       it 'supports pagination' do
-        get "/v3/app_usage/snapshots/#{snapshot.guid}/spaces?per_page=1", nil, admin_header
+        get "/v3/app_usage/snapshots/#{snapshot.guid}/chunks?per_page=1", nil, admin_header
 
         expect(last_response.status).to eq(200)
         response = Oj.load(last_response.body)
@@ -288,12 +306,14 @@ RSpec.describe 'App Usage Snapshots' do
           completed_at: nil,
           instance_count: 0,
           organization_count: 0,
-          space_count: 0
+          space_count: 0,
+          process_count: 0,
+          chunk_count: 0
         )
       end
 
       it 'returns 422 Unprocessable Entity' do
-        get "/v3/app_usage/snapshots/#{processing_snapshot.guid}/spaces", nil, admin_header
+        get "/v3/app_usage/snapshots/#{processing_snapshot.guid}/chunks", nil, admin_header
 
         expect(last_response.status).to eq(422)
         expect(last_response).to have_error_message('Snapshot is still processing')
@@ -302,7 +322,7 @@ RSpec.describe 'App Usage Snapshots' do
 
     context 'when the snapshot does not exist' do
       it 'returns 404' do
-        get '/v3/app_usage/snapshots/does-not-exist/spaces', nil, admin_header
+        get '/v3/app_usage/snapshots/does-not-exist/chunks', nil, admin_header
 
         expect(last_response.status).to eq(404)
         expect(last_response).to have_error_message('App usage snapshot not found')
@@ -313,7 +333,7 @@ RSpec.describe 'App Usage Snapshots' do
       let(:user_header) { headers_for(user) }
 
       it 'returns 404' do
-        get "/v3/app_usage/snapshots/#{snapshot.guid}/spaces", nil, user_header
+        get "/v3/app_usage/snapshots/#{snapshot.guid}/chunks", nil, user_header
 
         expect(last_response.status).to eq(404)
       end

@@ -42,13 +42,14 @@ Service usage snapshots provide a **non-destructive** alternative that:
 - Handles both managed and user-provided service instances
 - No race conditions (transactional guarantees)
 - Follows established V3 async job pattern
+- **Scales to very large datasets** via chunked storage
 
 ## Data Model
 
 Each snapshot consists of:
 
 1. **Parent Snapshot Record** - Contains summary totals and checkpoint reference
-2. **Space Detail Records** - One record per space with service instances, containing embedded JSON with per-instance details
+2. **Chunk Records** - Each chunk contains up to 100 service instances for a single space
 
 ```
 ┌─────────────────────────────────┐
@@ -61,16 +62,19 @@ Each snapshot consists of:
 │ service_instance_count (total)  │
 │ organization_count              │
 │ space_count                     │
+│ chunk_count                     │
+│ last_processed_service_instance │  ← For resumability
 └─────────────────────────────────┘
             │ 1:N
             ▼
 ┌─────────────────────────────────┐
-│ ServiceUsageSnapshotSpace       │
+│ ServiceUsageSnapshotChunk       │
 ├─────────────────────────────────┤
 │ id                              │
 │ service_usage_snapshot_id (FK)  │
-│ space_guid                      │
 │ organization_guid               │
+│ space_guid                      │
+│ chunk_index (0, 1, 2...)        │  ← For spaces with many instances
 │ service_instance_count          │
 │ service_instances (JSON)        │
 │   [{"guid":"...",               │
@@ -80,6 +84,19 @@ Each snapshot consists of:
 │     "plan_name":"small"}, ...]  │
 └─────────────────────────────────┘
 ```
+
+### Chunking Strategy
+
+Each chunk contains up to **100 service instances** for a **single space**. If a space has more than 100 service instances, it gets multiple chunks:
+
+- **Space with 50 service instances** → 1 chunk (chunk_index: 0)
+- **Space with 250 service instances** → 3 chunks (chunk_index: 0, 1, 2)
+- **10,000 spaces with 1 service instance each** → 10,000 chunks
+
+This ensures:
+- **Bounded memory usage** during generation (streaming, not all-in-memory)
+- **Bounded API response sizes** (each chunk is small)
+- **Resumability** for crash recovery (last_processed_service_instance_id)
 
 ## Consumer Onboarding Workflow
 
@@ -147,22 +164,23 @@ curl "https://api.example.org/v3/service_usage/snapshots/snapshot-guid-123" \
   "summary": {
     "service_instance_count": 1500,
     "organization_count": 50,
-    "space_count": 200
+    "space_count": 200,
+    "chunk_count": 250
   },
   "links": {
     "self": { "href": "/v3/service_usage/snapshots/snapshot-guid-123" },
     "checkpoint_event": { "href": "/v3/service_usage_events/98765" },
-    "spaces": { "href": "/v3/service_usage/snapshots/snapshot-guid-123/spaces" }
+    "chunks": { "href": "/v3/service_usage/snapshots/snapshot-guid-123/chunks" }
   }
 }
 ```
 
-### Step 4: Retrieve Per-Space Details (Optional)
+### Step 4: Retrieve Chunks (Optional)
 
-For detailed per-space and per-instance data:
+For detailed per-instance data, paginate through chunks:
 
 ```bash
-curl "https://api.example.org/v3/service_usage/snapshots/snapshot-guid-123/spaces" \
+curl "https://api.example.org/v3/service_usage/snapshots/snapshot-guid-123/chunks" \
   -H "Authorization: bearer [token]"
 ```
 
@@ -170,17 +188,18 @@ curl "https://api.example.org/v3/service_usage/snapshots/snapshot-guid-123/space
 ```json
 {
   "pagination": {
-    "total_results": 200,
-    "total_pages": 4,
-    "first": { "href": "/v3/service_usage/snapshots/snapshot-guid-123/spaces?page=1" },
-    "last": { "href": "/v3/service_usage/snapshots/snapshot-guid-123/spaces?page=4" },
-    "next": { "href": "/v3/service_usage/snapshots/snapshot-guid-123/spaces?page=2" },
+    "total_results": 250,
+    "total_pages": 5,
+    "first": { "href": "/v3/service_usage/snapshots/snapshot-guid-123/chunks?page=1" },
+    "last": { "href": "/v3/service_usage/snapshots/snapshot-guid-123/chunks?page=5" },
+    "next": { "href": "/v3/service_usage/snapshots/snapshot-guid-123/chunks?page=2" },
     "previous": null
   },
   "resources": [
     {
-      "space_guid": "space-abc-123",
       "organization_guid": "org-xyz-789",
+      "space_guid": "space-abc-123",
+      "chunk_index": 0,
       "service_instance_count": 5,
       "service_instances": [
         { "guid": "si-1", "name": "my-db", "type": "managed", "service_label": "mysql", "plan_name": "small" },
@@ -189,8 +208,9 @@ curl "https://api.example.org/v3/service_usage/snapshots/snapshot-guid-123/space
       ]
     },
     {
-      "space_guid": "space-def-456",
       "organization_guid": "org-xyz-789",
+      "space_guid": "space-def-456",
+      "chunk_index": 0,
       "service_instance_count": 2,
       "service_instances": [
         { "guid": "si-4", "name": "other-db", "type": "managed", "service_label": "postgres", "plan_name": "large" },
@@ -212,7 +232,7 @@ curl "https://api.example.org/v3/service_usage_events?after_guid=event-at-checkp
 
 - **Baseline**: The `checkpoint_event_id` marks the point at which the snapshot was taken
 - **Summary counts**: `service_instance_count`, `organization_count`, `space_count` for the baseline
-- **Per-space details**: Breakdown of service instances by space with full metadata
+- **Per-instance details**: Breakdown of service instances by space with full metadata (via chunks)
 - **Stream**: All events after checkpoint 98765
 - **Completeness**: No gaps, no duplicates
 
@@ -273,9 +293,9 @@ curl "https://api.example.org/v3/service_usage/snapshots?per_page=50" \
 }
 ```
 
-### GET /v3/service_usage/snapshots/:guid/spaces
+### GET /v3/service_usage/snapshots/:guid/chunks
 
-Retrieve per-space detail records for a completed snapshot.
+Retrieve chunk records for a completed snapshot.
 
 **Query Parameters:**
 - `per_page` (optional): Number of results per page (default: 50)
@@ -283,54 +303,26 @@ Retrieve per-space detail records for a completed snapshot.
 
 **Required Permission:** Global read access
 
-**Response:** Paginated list of space records with embedded service instance details
+**Response:** Paginated list of chunk records with embedded service instance details
 
 **Error:**
 - `422 Unprocessable Entity` if snapshot is still processing
 
-## Architecture
-
-### Database Schema
-
-**service_usage_snapshots table:**
-- `id`: Primary key
-- `guid`: Unique identifier
-- `checkpoint_event_id`: Last service_usage_event.id at snapshot time
-- `checkpoint_event_created_at`: Timestamp of checkpoint event
-- `created_at`: Snapshot creation start time
-- `completed_at`: Snapshot completion time (NULL = in progress)
-- `service_instance_count`: Total service instances in snapshot
-- `organization_count`: Unique organizations
-- `space_count`: Unique spaces
-
-**service_usage_snapshot_spaces table:**
-- `id`: Primary key
-- `service_usage_snapshot_id`: Foreign key to parent snapshot (CASCADE DELETE)
-- `space_guid`: Space identifier
-- `organization_guid`: Organization identifier
-- `service_instance_count`: Count of instances in this space
-- `service_instances`: JSON array of instance details
-
-### Snapshot Generation Process
-
-1. **Create Placeholder**: Create snapshot record with `completed_at = NULL`
-2. **Checkpoint**: Record `max(service_usage_event.id)` and its `created_at`
-3. **Query**: Fetch all service instances grouped by space
-4. **Batch Insert**: Create space records with embedded JSON (1000 per batch)
-5. **Mark Complete**: Set `completed_at` timestamp and summary counts
-
-**Note on Concurrent Requests:** In rare cases (two admins clicking simultaneously), two snapshots may be created with the same `checkpoint_event_id`. This is harmless - both contain valid data, and consumers can dedupe by checkpoint if needed.
-
-### Performance Characteristics
+## Performance Characteristics
 
 **Estimated Generation Times:**
 
-| Service Instances | Spaces | Estimated Time |
-|-------------------|--------|----------------|
-| 1,000 | 100 | < 1 second |
-| 10,000 | 1,000 | 1-2 seconds |
-| 100,000 | 10,000 | 10-30 seconds |
-| 1,000,000 | 100,000 | 2-5 minutes |
+| Service Instances | Spaces | Chunks | Estimated Time |
+|-------------------|--------|--------|----------------|
+| 1,000 | 100 | 100 | < 1 second |
+| 10,000 | 1,000 | 1,000 | 1-2 seconds |
+| 100,000 | 10,000 | 10,000 | 10-30 seconds |
+| 1,000,000 | 100,000 | 100,000+ | 2-5 minutes |
+
+**Scale characteristics:**
+- Memory usage: **Bounded** regardless of data size (streaming + chunking)
+- Database load: **Non-blocking** (uses keyset pagination, no table locks)
+- API responses: **Bounded** (each chunk ≤ 100 service instances)
 
 **Factors affecting performance:**
 - Database load
@@ -360,19 +352,9 @@ curl "https://api.example.org/v3/service_usage_events/98765" \
 
 If an organization or space is deleted while a service instance still exists, the snapshot will still account for that instance in the summary counts. The LEFT JOINs used in the query handle this gracefully.
 
-## Cleanup and Retention
+### Resumability
 
-**Automatic Cleanup:**
-- Runs daily at 04:05 UTC
-- Deletes completed snapshots older than 31 days (configurable)
-- Only deletes snapshots where `completed_at IS NOT NULL`
-- FK CASCADE automatically deletes associated space records
-
-**Configuration:**
-```yaml
-service_usage_snapshot:
-  cutoff_age_in_days: 31
-```
+If snapshot generation is interrupted (server restart, etc.), the system tracks `last_processed_service_instance_id` to allow resumption. This ensures very large snapshots can be generated even if the process needs to be restarted.
 
 ## Deprecation Path
 
@@ -400,32 +382,16 @@ curl "https://api.example.org/v3/service_usage/snapshots" \
   -H "Authorization: bearer [token]"
 ```
 
-## Monitoring and Observability
-
-**Prometheus Metrics:**
-
-- `cc_service_usage_snapshot_generation_duration_seconds` (histogram): Generation time
-- `cc_service_usage_snapshot_service_instance_count` (gauge): Service instances in last snapshot
-- `cc_service_usage_snapshot_generation_failures_total` (counter): Failed generations
-- `cc_service_usage_snapshot_cleaned_up_total` (gauge): Snapshots deleted by cleanup job
-
-**Logs:**
-
-- `cc.service_usage_snapshot_repository`: Snapshot generation
-- `cc.background.service-usage-snapshot-generator`: Job execution
-- `cc.background.service-usage-snapshot-cleanup`: Cleanup job
-
 ## Design Decisions
 
 This section documents intentional design choices made during implementation.
 
-### Stale Snapshot Cleanup Timeout (1 Hour)
+### Simple Fixed-Size Chunking
 
-The cleanup job considers snapshots "stale" if they've been processing for more than 1 hour without completing. This timeout was chosen because:
-- Normal snapshot generation completes within minutes, even for very large foundations
-- 1 hour provides ample buffer for slow systems or database contention
-- It's short enough to not block new snapshot requests indefinitely
-- It aligns with similar timeout patterns elsewhere in the codebase
+The snapshot uses a simple chunking strategy: each chunk = up to 100 service instances for one space. This ensures:
+- Bounded memory during generation
+- Bounded API response sizes
+- Simple consumer code (one chunk format)
 
 ### Checkpoint Event May Be Pruned
 
@@ -436,20 +402,18 @@ The `checkpoint_event_id` stored in a snapshot may point to an event that has si
 
 **Recommendation:** Create snapshots more frequently than the pruning window (e.g., weekly) to ensure you always have a valid checkpoint.
 
-### Per-Space Detail Records with Embedded JSON
+## Monitoring and Observability
 
-The snapshot stores per-space detail records with embedded JSON containing service instance data. This design choice balances:
-- **Detail**: Full per-instance breakdown (guid, name, type, service_label, plan_name)
-- **Efficiency**: One row per space instead of one row per instance
-- **Queryability**: Space-level aggregates are directly accessible
-- **Flexibility**: JSON allows for future schema evolution without migrations
+**Prometheus Metrics:**
 
-### Pagination Limits
+- `cc_service_usage_snapshot_generation_duration_seconds` (histogram): Generation time
+- `cc_service_usage_snapshot_service_instance_count` (gauge): Service instances in last snapshot
+- `cc_service_usage_snapshot_generation_failures_total` (counter): Failed generations
 
-The snapshot list endpoint uses the standard Cloud Controller pagination via `SequelPaginator`. The default and maximum page sizes are enforced by the paginator, consistent with all other V3 list endpoints. This ensures:
-- Consistent behavior across all APIs
-- Protection against unbounded queries
-- Predictable memory usage
+**Logs:**
+
+- `cc.service_usage_snapshot_repository`: Snapshot generation
+- `cc.background.service-usage-snapshot-generator`: Job execution
 
 ## Related Documentation
 
@@ -464,4 +428,3 @@ This feature mirrors the app usage snapshots implementation with key adaptations
 - No state filtering (all service instances are "active")
 - Handles both managed and user-provided service instances
 - Separate error codes (440004-440006 vs 440001-440003)
-- Separate cleanup schedule (04:05 vs 04:00)

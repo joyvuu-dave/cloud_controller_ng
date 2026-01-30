@@ -13,8 +13,10 @@ module VCAP::CloudController
             checkpoint_event_created_at: snapshot.checkpoint_event_created_at,
             summary: {
               instance_count: snapshot.instance_count,
+              process_count: snapshot.process_count,
               organization_count: snapshot.organization_count,
-              space_count: snapshot.space_count
+              space_count: snapshot.space_count,
+              chunk_count: snapshot.chunk_count
             },
             links: build_links
           }
@@ -47,7 +49,7 @@ module VCAP::CloudController
 
           links[:checkpoint_event] = { href: url_builder.build_url(path: "/v3/app_usage_events/#{snapshot.checkpoint_event_id}") } if snapshot.checkpoint_event_id.present?
 
-          links[:spaces] = { href: url_builder.build_url(path: "/v3/app_usage/snapshots/#{snapshot.guid}/spaces") } if snapshot.complete?
+          links[:chunks] = { href: url_builder.build_url(path: "/v3/app_usage/snapshots/#{snapshot.guid}/chunks") } if snapshot.complete?
 
           links
         end

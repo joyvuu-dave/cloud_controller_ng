@@ -41,13 +41,14 @@ Usage snapshots provide a **non-destructive** alternative that:
 - Multiple consumers can onboard independently
 - No race conditions (transactional guarantees)
 - Follows established V3 async job pattern
+- **Scales to very large datasets** via chunked storage
 
 ## Data Model
 
 Each snapshot consists of:
 
 1. **Parent Snapshot Record** - Contains summary totals and checkpoint reference
-2. **Space Detail Records** - One record per space with running processes, containing embedded JSON with per-process details
+2. **Chunk Records** - Each chunk contains up to 100 processes for a single space
 
 ```
 ┌─────────────────────────────┐
@@ -58,18 +59,23 @@ Each snapshot consists of:
 │ checkpoint_event_created_at │
 │ created_at, completed_at    │
 │ instance_count (total)      │
+│ process_count (total)       │
 │ organization_count          │
 │ space_count                 │
+│ chunk_count                 │
+│ last_processed_process_id   │  ← For resumability
 └─────────────────────────────┘
             │ 1:N
             ▼
 ┌─────────────────────────────┐
-│ AppUsageSnapshotSpace       │
+│ AppUsageSnapshotChunk       │
 ├─────────────────────────────┤
 │ id                          │
 │ app_usage_snapshot_id (FK)  │
-│ space_guid                  │
 │ organization_guid           │
+│ space_guid                  │
+│ chunk_index (0, 1, 2...)    │  ← For spaces with many processes
+│ process_count               │
 │ instance_count              │
 │ processes (JSON)            │
 │   [{"app_guid":"...",       │
@@ -77,6 +83,19 @@ Each snapshot consists of:
 │     "instances":3}, ...]    │
 └─────────────────────────────┘
 ```
+
+### Chunking Strategy
+
+Each chunk contains up to **100 processes** for a **single space**. If a space has more than 100 processes, it gets multiple chunks:
+
+- **Space with 50 processes** → 1 chunk (chunk_index: 0)
+- **Space with 250 processes** → 3 chunks (chunk_index: 0, 1, 2)
+- **10,000 spaces with 1 process each** → 10,000 chunks
+
+This ensures:
+- **Bounded memory usage** during generation (streaming, not all-in-memory)
+- **Bounded API response sizes** (each chunk is small)
+- **Resumability** for crash recovery (last_processed_process_id)
 
 ## Consumer Onboarding Workflow
 
@@ -143,23 +162,25 @@ curl "https://api.example.org/v3/app_usage/snapshots/snapshot-guid-123" \
   "checkpoint_event_created_at": "2026-01-14T09:59:58Z",
   "summary": {
     "instance_count": 15234,
+    "process_count": 5000,
     "organization_count": 42,
-    "space_count": 156
+    "space_count": 156,
+    "chunk_count": 200
   },
   "links": {
     "self": { "href": "/v3/app_usage/snapshots/snapshot-guid-123" },
     "checkpoint_event": { "href": "/v3/app_usage_events/999999" },
-    "spaces": { "href": "/v3/app_usage/snapshots/snapshot-guid-123/spaces" }
+    "chunks": { "href": "/v3/app_usage/snapshots/snapshot-guid-123/chunks" }
   }
 }
 ```
 
-### Step 4: Retrieve Per-Space Details (Optional)
+### Step 4: Retrieve Chunks (Optional)
 
-For detailed per-space and per-process data:
+For detailed per-process data, paginate through chunks:
 
 ```bash
-curl "https://api.example.org/v3/app_usage/snapshots/snapshot-guid-123/spaces" \
+curl "https://api.example.org/v3/app_usage/snapshots/snapshot-guid-123/chunks" \
   -H "Authorization: bearer [token]"
 ```
 
@@ -167,18 +188,20 @@ curl "https://api.example.org/v3/app_usage/snapshots/snapshot-guid-123/spaces" \
 ```json
 {
   "pagination": {
-    "total_results": 156,
-    "total_pages": 2,
-    "first": { "href": "/v3/app_usage/snapshots/snapshot-guid-123/spaces?page=1" },
-    "last": { "href": "/v3/app_usage/snapshots/snapshot-guid-123/spaces?page=2" },
-    "next": { "href": "/v3/app_usage/snapshots/snapshot-guid-123/spaces?page=2" },
+    "total_results": 200,
+    "total_pages": 4,
+    "first": { "href": "/v3/app_usage/snapshots/snapshot-guid-123/chunks?page=1" },
+    "last": { "href": "/v3/app_usage/snapshots/snapshot-guid-123/chunks?page=4" },
+    "next": { "href": "/v3/app_usage/snapshots/snapshot-guid-123/chunks?page=2" },
     "previous": null
   },
   "resources": [
     {
-      "space_guid": "space-abc-123",
       "organization_guid": "org-xyz-789",
-      "instance_count": 150,
+      "space_guid": "space-abc-123",
+      "chunk_index": 0,
+      "process_count": 100,
+      "instance_count": 350,
       "processes": [
         { "app_guid": "app-1", "process_type": "web", "instances": 100 },
         { "app_guid": "app-1", "process_type": "worker", "instances": 25 },
@@ -186,11 +209,13 @@ curl "https://api.example.org/v3/app_usage/snapshots/snapshot-guid-123/spaces" \
       ]
     },
     {
-      "space_guid": "space-def-456",
       "organization_guid": "org-xyz-789",
-      "instance_count": 50,
+      "space_guid": "space-abc-123",
+      "chunk_index": 1,
+      "process_count": 50,
+      "instance_count": 150,
       "processes": [
-        { "app_guid": "app-3", "process_type": "web", "instances": 50 }
+        { "app_guid": "app-3", "process_type": "web", "instances": 150 }
       ]
     }
   ]
@@ -206,8 +231,8 @@ curl "https://api.example.org/v3/app_usage_events?after_guid=999999&per_page=100
 
 Your billing system now has:
 - **Baseline**: The `checkpoint_event_id` marks the point at which the snapshot was taken
-- **Summary counts**: `instance_count`, `organization_count`, `space_count` for the baseline
-- **Per-space details**: Breakdown of instances by space and process
+- **Summary counts**: `instance_count`, `process_count`, `organization_count`, `space_count` for the baseline
+- **Per-process details**: Breakdown of instances by space and process (via chunks)
 - **Event stream**: All events after the checkpoint
 
 ## API Reference
@@ -241,9 +266,9 @@ Retrieve a specific snapshot.
 
 **Response:** Snapshot object with summary counts and links
 
-### GET /v3/app_usage/snapshots/:guid/spaces
+### GET /v3/app_usage/snapshots/:guid/chunks
 
-Retrieve per-space detail records for a completed snapshot.
+Retrieve chunk records for a completed snapshot.
 
 **Query Parameters:**
 - `per_page` (optional): Number of results per page (default: 50)
@@ -251,7 +276,7 @@ Retrieve per-space detail records for a completed snapshot.
 
 **Required Permission:** Global read access
 
-**Response:** Paginated list of space records with embedded process details
+**Response:** Paginated list of chunk records with embedded process details
 
 **Error:**
 - `422 Unprocessable Entity` if snapshot is still processing
@@ -309,13 +334,14 @@ class UsageTracker
     # Record baseline counts (summary level)
     record_baseline(
       instance_count: snapshot['summary']['instance_count'],
+      process_count: snapshot['summary']['process_count'],
       org_count: snapshot['summary']['organization_count'],
       space_count: snapshot['summary']['space_count'],
       checkpoint: checkpoint
     )
 
-    # Optionally, record per-space details for detailed tracking
-    record_space_details(snapshot_guid)
+    # Optionally, record per-process details for detailed tracking
+    record_chunk_details(snapshot_guid)
 
     # Start processing events from checkpoint
     process_events_from(checkpoint)
@@ -323,17 +349,19 @@ class UsageTracker
 
   private
 
-  def record_space_details(snapshot_guid)
+  def record_chunk_details(snapshot_guid)
     page = 1
     loop do
-      response = @api_client.get("/v3/app_usage/snapshots/#{snapshot_guid}/spaces?page=#{page}")
+      response = @api_client.get("/v3/app_usage/snapshots/#{snapshot_guid}/chunks?page=#{page}")
       
-      response['resources'].each do |space_record|
-        record_space_baseline(
-          space_guid: space_record['space_guid'],
-          org_guid: space_record['organization_guid'],
-          instance_count: space_record['instance_count'],
-          processes: space_record['processes']
+      response['resources'].each do |chunk|
+        record_chunk_baseline(
+          space_guid: chunk['space_guid'],
+          org_guid: chunk['organization_guid'],
+          chunk_index: chunk['chunk_index'],
+          process_count: chunk['process_count'],
+          instance_count: chunk['instance_count'],
+          processes: chunk['processes']
         )
       end
       
@@ -416,16 +444,21 @@ If snapshot generation fails, the job will show:
 
 **Solution**: Retry the snapshot creation. The system ensures no partial snapshots are created. Any stale in-progress snapshots (stuck for more than 1 hour) are automatically cleaned up.
 
+### Resumability
+
+If snapshot generation is interrupted (server restart, etc.), the system tracks `last_processed_process_id` to allow resumption. This ensures very large snapshots can be generated even if the process needs to be restarted.
+
 ### Deleted Organizations or Spaces
 
 If an organization or space is deleted while a process is still running, the snapshot will still account for that process in the summary counts. The LEFT JOINs used in the query handle this gracefully.
 
 ### Large Datasets
 
-For foundations with 100K+ running instances:
-- Snapshot generation may take 30-60 seconds
-- Space records are batch-inserted for efficiency (1000 records per batch)
-- JSON embedding keeps row count manageable (1 row per space, not per process)
+For foundations with millions of running instances:
+- Snapshot generation uses **streaming** (paged_each) to avoid loading all data into memory
+- Chunks are **batch-inserted** (1000 records per batch) for efficiency
+- Each chunk contains at most **100 processes** to keep response sizes bounded
+- Generation may take hours or days for extremely large datasets, but remains **non-blocking**
 
 ### Checkpoint Pruning
 
@@ -454,20 +487,24 @@ Usage events are pruned after 30 days. If your snapshot's `checkpoint_event` lin
 
 **Expected snapshot generation times:**
 
-| Running Instances | Spaces | Generation Time |
-|-------------------|--------|-----------------|
-| 1,000             | 100    | 100-300ms       |
-| 10,000            | 1,000  | 1-3 seconds     |
-| 100,000           | 10,000 | 10-30 seconds   |
-| 1,000,000         | 100,000| 2-5 minutes     |
+| Running Processes | Spaces  | Chunks   | Generation Time |
+|-------------------|---------|----------|-----------------|
+| 1,000             | 100     | 100      | 100-300ms       |
+| 10,000            | 1,000   | 1,000    | 1-3 seconds     |
+| 100,000           | 10,000  | 10,000   | 10-30 seconds   |
+| 1,000,000         | 100,000 | 100,000+ | 2-5 minutes     |
 
 Note: These are estimates for typical hardware. Actual times depend on database performance, disk I/O, and system load.
 
-**Storage requirements:**
+**Scale characteristics:**
+- Memory usage: **Bounded** regardless of data size (streaming + chunking)
+- Database load: **Non-blocking** (uses keyset pagination, no table locks)
+- API responses: **Bounded** (each chunk ≤ 100 processes)
 
+**Storage requirements:**
 - Snapshot record: ~100 bytes per snapshot
-- Space record: ~500 bytes + JSON size per space
-- With 31-day retention and 10K spaces: ~150MB per snapshot
+- Chunk record: ~500 bytes + JSON size per chunk (~50 processes average)
+- With 31-day retention and 10K chunks: ~5MB per snapshot
 
 ## Migration from `destructively_purge_all_and_reseed`
 
@@ -495,6 +532,15 @@ curl "https://api.example.org/v3/app_usage/snapshots" \
 
 This section documents intentional design choices made during implementation.
 
+### Simple Fixed-Size Chunking
+
+The snapshot uses a simple chunking strategy: each chunk = up to 100 processes for one space. We considered adaptive chunking (different chunk types for different hierarchies) but rejected it because:
+
+- Same storage requirements with either approach
+- Simple chunking is much easier to understand and debug
+- Consumer code is simpler (one chunk format to parse)
+- At extreme scale, most chunks would be process-level anyway
+
 ### Stale Snapshot Cleanup Timeout (1 Hour)
 
 The cleanup job considers snapshots "stale" if they've been processing for more than 1 hour without completing. This timeout was chosen because:
@@ -512,13 +558,13 @@ The `checkpoint_event_id` stored in a snapshot may point to an event that has si
 
 **Recommendation:** Create snapshots more frequently than the pruning window (e.g., weekly) to ensure you always have a valid checkpoint.
 
-### Per-Space Detail Records with Embedded JSON
+### Chunked Storage for Scale
 
-The snapshot stores per-space detail records with embedded JSON containing process-level data. This design choice balances:
-- **Detail**: Full per-process breakdown (app_guid, process_type, instances)
-- **Efficiency**: One row per space instead of one row per process (15x reduction)
-- **Queryability**: Space-level aggregates are directly accessible
-- **Flexibility**: JSON allows for future schema evolution without migrations
+The snapshot stores data in bounded chunks (max 100 processes per chunk) rather than one record per space. This design choice enables:
+- **Bounded memory** during generation (streaming, not all-in-memory)
+- **Bounded API responses** (each page is small)
+- **Resumability** (can continue after crash)
+- **Arbitrarily large scale** (even trillions of processes, theoretically)
 
 ### Instance Count vs Process Count
 
@@ -526,6 +572,8 @@ The `instance_count` field represents the **total number of running instances** 
 - A single process can have multiple instances (e.g., 3 instances of a web process)
 - Billing is typically based on instance-hours, not process-hours
 - The instance count reflects actual resource consumption
+
+The `process_count` field is also provided for completeness.
 
 ## Support
 

@@ -899,12 +899,16 @@ module VCAP::CloudController
     instance_count { 0 }
     organization_count { 0 }
     space_count { 0 }
+    process_count { 0 }
+    chunk_count { 0 }
   end
 
-  AppUsageSnapshotSpace.blueprint do
+  AppUsageSnapshotChunk.blueprint do
     app_usage_snapshot { AppUsageSnapshot.make }
-    space_guid { Sham.guid }
     organization_guid { Sham.guid }
+    space_guid { Sham.guid }
+    chunk_index { 0 }
+    process_count { 0 }
     instance_count { 0 }
     processes { [] }
   end
@@ -916,12 +920,14 @@ module VCAP::CloudController
     service_instance_count { 0 }
     organization_count { 0 }
     space_count { 0 }
+    chunk_count { 0 }
   end
 
-  ServiceUsageSnapshotSpace.blueprint do
+  ServiceUsageSnapshotChunk.blueprint do
     service_usage_snapshot { ServiceUsageSnapshot.make }
-    space_guid { Sham.guid }
     organization_guid { Sham.guid }
+    space_guid { Sham.guid }
+    chunk_index { 0 }
     service_instance_count { 0 }
     service_instances { [] }
   end
