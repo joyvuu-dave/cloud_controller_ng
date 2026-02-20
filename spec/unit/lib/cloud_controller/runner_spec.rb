@@ -11,6 +11,22 @@ module VCAP::CloudController
 
     let(:argv) { [] }
 
+    # Runner#initialize calls set_process_type_env which sets
+    # ENV['PROCESS_TYPE'] to 'main'. Normally PROCESS_TYPE is unset in the
+    # test environment. This leak is harmless today ('main' maps to
+    # API_PUMA_MAIN, the same default), but it is still pollution that should
+    # be cleaned up.
+    around do |example|
+      original_process_type = ENV.fetch('PROCESS_TYPE', nil)
+      example.run
+    ensure
+      if original_process_type.nil?
+        ENV.delete('PROCESS_TYPE')
+      else
+        ENV['PROCESS_TYPE'] = original_process_type
+      end
+    end
+
     before do
       allow(Steno).to receive(:init)
       allow(CloudController::DependencyLocator.instance).to receive(:routing_api_client).and_return(routing_api_client)
