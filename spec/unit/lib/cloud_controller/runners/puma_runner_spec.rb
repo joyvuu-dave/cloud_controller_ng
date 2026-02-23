@@ -33,6 +33,23 @@ module VCAP::CloudController
       PumaRunner.new(test_config, app, logger, periodic_updater, request_logs)
     end
 
+    # The before_worker_boot callback calls set_process_type_env which sets
+    # ENV['PROCESS_TYPE'] to 'puma_worker'. Normally PROCESS_TYPE is unset in
+    # the test environment, allowing ExecutionContext.from_process_type_env to
+    # fall back to API_PUMA_MAIN via the CC_TEST=true check. This leak is
+    # harmless today (API_PUMA_WORKER registers all metrics just like
+    # API_PUMA_MAIN), but it is still pollution that should be cleaned up.
+    around do |example|
+      original_process_type = ENV.fetch('PROCESS_TYPE', nil)
+      example.run
+    ensure
+      if original_process_type.nil?
+        ENV.delete('PROCESS_TYPE')
+      else
+        ENV['PROCESS_TYPE'] = original_process_type
+      end
+    end
+
     before do
       allow(logger).to receive(:info)
       allow(CloudController::DependencyLocator).to receive(:instance).and_return(dependency_locator)

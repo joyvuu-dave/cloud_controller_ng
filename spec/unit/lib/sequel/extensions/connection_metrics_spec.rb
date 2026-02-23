@@ -10,6 +10,26 @@ RSpec.describe Sequel::ConnectionMetrics do
   let(:prometheus_updater) { spy(VCAP::CloudController::Metrics::PrometheusUpdater) }
   let(:thread) { double('Thread') }
 
+  # Tests in this file call set_process_type_env which sets ENV['PROCESS_TYPE']
+  # to 'cc-worker' or 'puma_worker'. Normally PROCESS_TYPE is unset in the
+  # test environment, allowing ExecutionContext.from_process_type_env to fall
+  # back to API_PUMA_MAIN via the CC_TEST=true check. The 'cc-worker' value
+  # is the actual cause of flaky prometheus_updater_spec failures: it maps to
+  # CC_WORKER, which only registers a subset of metrics, so registry.get()
+  # returns nil for unregistered metrics. The 'puma_worker' value happens to
+  # be harmless today (API_PUMA_WORKER registers all metrics), but it is
+  # still pollution that should be cleaned up.
+  around do |example|
+    original_process_type = ENV.fetch('PROCESS_TYPE', nil)
+    example.run
+  ensure
+    if original_process_type.nil?
+      ENV.delete('PROCESS_TYPE')
+    else
+      ENV['PROCESS_TYPE'] = original_process_type
+    end
+  end
+
   after do
     db.disconnect
   end
