@@ -1,11 +1,13 @@
 require 'cloud_controller/database_uri_generator'
 require 'cloud_controller/serializer'
 require 'models/helpers/process_types'
+require 'models/helpers/name_charset_validator'
 require 'hashdiff'
 
 module VCAP::CloudController
   class AppModel < Sequel::Model(:apps)
     include Serializer
+    include NameCharsetValidator
 
     APP_NAME_REGEX = /\A[[:alnum:][:punct:][:print:]]+\Z/
     DEFAULT_CONTAINER_USER = 'vcap'.freeze
@@ -97,6 +99,7 @@ module VCAP::CloudController
       super
       validates_presence :name
       validates_format APP_NAME_REGEX, :name
+      validate_name_charset
       validate_environment_variables
       validate_droplet_is_staged
 

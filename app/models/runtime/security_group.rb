@@ -1,7 +1,10 @@
 require 'netaddr'
+require 'models/helpers/name_charset_validator'
 
 module VCAP::CloudController
   class SecurityGroup < Sequel::Model
+    include NameCharsetValidator
+
     SECURITY_GROUP_NAME_REGEX = /\A[[:alnum:][:punct:][:print:]]+\Z/
     MAX_RULES_CHAR_LENGTH = (2**24) - 1
 
@@ -26,6 +29,7 @@ module VCAP::CloudController
       validates_presence :name
       validates_unique :name
       validates_format SECURITY_GROUP_NAME_REGEX, :name
+      validate_name_charset
       validate_rules_length
       validate_rules
     end

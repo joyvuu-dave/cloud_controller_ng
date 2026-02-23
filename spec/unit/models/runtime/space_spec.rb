@@ -63,6 +63,27 @@ module VCAP::CloudController
             space.save
           end.to raise_error(Sequel::ValidationFailed)
         end
+
+        context 'emoji characters on mysql' do
+          before { allow(space.db).to receive(:database_type).and_return(:mysql) }
+
+          it 'does not allow emoji characters' do
+            space.name = '🍹'
+            expect { space.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
+          end
+
+          it 'allows BMP unicode characters' do
+            space.name = '防御力¡'
+            expect { space.save }.not_to raise_error
+          end
+
+          it 'rejects emoji on rename of existing space' do
+            space.name = 'valid-name'
+            space.save
+            space.name = '🍹-renamed'
+            expect { space.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
+          end
+        end
       end
 
       context 'organization' do
