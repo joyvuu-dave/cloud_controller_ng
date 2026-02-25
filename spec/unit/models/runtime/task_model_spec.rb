@@ -546,6 +546,27 @@ module VCAP::CloudController
                            command: 'bundle exec rake db:migrate')
           end.to raise_error(Sequel::ValidationFailed, /name presence/)
         end
+
+        context 'emoji characters on mysql' do
+          before { allow(task.db).to receive(:database_type).and_return(:mysql) }
+
+          it 'does not allow emoji characters' do
+            task.name = '🍹'
+            expect { task.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
+          end
+
+          it 'allows BMP unicode characters' do
+            task.name = '防御力¡'
+            expect { task.save }.not_to raise_error
+          end
+
+          it 'rejects emoji on rename of existing task' do
+            task.name = 'valid-name'
+            task.save
+            task.name = '🍹-renamed'
+            expect { task.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
+          end
+        end
       end
 
       describe 'quotas' do

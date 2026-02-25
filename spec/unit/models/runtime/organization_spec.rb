@@ -163,6 +163,27 @@ module VCAP::CloudController
             org.save
           end.to raise_error(Sequel::ValidationFailed)
         end
+
+        context 'emoji characters on mysql' do
+          before { allow(org.db).to receive(:database_type).and_return(:mysql) }
+
+          it 'does not allow emoji characters' do
+            org.name = '🍹'
+            expect { org.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
+          end
+
+          it 'allows BMP unicode characters' do
+            org.name = '防御力¡'
+            expect { org.save }.not_to raise_error
+          end
+
+          it 'rejects emoji on rename of existing organization' do
+            org.name = 'valid-name'
+            org.save
+            org.name = '🍹-renamed'
+            expect { org.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
+          end
+        end
       end
 
       describe 'isolation_segments' do
