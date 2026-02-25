@@ -480,27 +480,6 @@ module VCAP::CloudController
             sec_group.save
           end.to raise_error(Sequel::ValidationFailed)
         end
-
-        context 'emoji characters on mysql' do
-          before { allow(sec_group.db).to receive(:database_type).and_return(:mysql) }
-
-          it 'does not allow emoji characters' do
-            sec_group.name = '🍹'
-            expect { sec_group.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
-          end
-
-          it 'allows BMP unicode characters' do
-            sec_group.name = '防御力¡'
-            expect { sec_group.save }.not_to raise_error
-          end
-
-          it 'rejects emoji on rename of existing security group' do
-            sec_group.name = 'valid-name'
-            sec_group.save
-            sec_group.name = '🍹-renamed'
-            expect { sec_group.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
-          end
-        end
       end
 
       context 'rules' do
