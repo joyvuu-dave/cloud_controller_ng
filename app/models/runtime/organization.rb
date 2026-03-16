@@ -1,7 +1,10 @@
 require 'models/helpers/process_types'
+require 'models/helpers/name_charset_validator'
 
 module VCAP::CloudController
   class Organization < Sequel::Model
+    include NameCharsetValidator
+
     ORG_NAME_REGEX = /\A[[:alnum:][:punct:][:print:]]+\Z/
     ACTIVE = 'active'.freeze
     SUSPENDED = 'suspended'.freeze
@@ -220,6 +223,7 @@ module VCAP::CloudController
       validates_presence :name
       validates_unique :name
       validates_format ORG_NAME_REGEX, :name
+      validate_name_charset
       validates_includes ORG_STATUS_VALUES, :status, allow_missing: true
 
       return unless column_changed?(:default_isolation_segment_guid)

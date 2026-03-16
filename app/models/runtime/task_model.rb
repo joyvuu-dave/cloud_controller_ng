@@ -1,6 +1,9 @@
+require 'models/helpers/name_charset_validator'
+
 module VCAP::CloudController
   class TaskModel < Sequel::Model(:tasks)
     include Serializer
+    include NameCharsetValidator
 
     TASK_NAME_REGEX = /\A[[:alnum:][:punct:][:print:]]+\Z/
     TASK_STATES = [
@@ -86,6 +89,7 @@ module VCAP::CloudController
     def validate
       validates_includes TASK_STATES, :state
       validates_format TASK_NAME_REGEX, :name
+      validate_name_charset
 
       validates_presence :app
       validates_presence :command

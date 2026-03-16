@@ -169,6 +169,28 @@ module VCAP::CloudController
           IsolationSegmentModel.make(name: "a \e word")
         end.to raise_error(Sequel::ValidationFailed)
       end
+
+      context 'emoji characters on mysql' do
+        before { allow(IsolationSegmentModel.db).to receive(:database_type).and_return(:mysql) }
+
+        it 'does not allow emoji characters' do
+          expect do
+            IsolationSegmentModel.make(name: '🍹')
+          end.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
+        end
+
+        it 'allows BMP unicode characters' do
+          expect do
+            IsolationSegmentModel.make(name: '防御力¡')
+          end.not_to raise_error
+        end
+
+        it 'rejects emoji on rename of existing isolation segment' do
+          iso_seg = IsolationSegmentModel.make(name: 'valid-name')
+          iso_seg.name = '🍹-renamed'
+          expect { iso_seg.save }.to raise_error(Sequel::ValidationFailed, /characters that are not supported/)
+        end
+      end
     end
 
     describe '#is_shared_segment?' do

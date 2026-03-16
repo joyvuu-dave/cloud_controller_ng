@@ -1,4 +1,5 @@
 require 'models/helpers/process_types'
+require 'models/helpers/name_charset_validator'
 require 'cloud_controller/errors/invalid_relation'
 
 module VCAP::CloudController
@@ -11,6 +12,8 @@ module VCAP::CloudController
     class UnauthorizedAccessToPrivateDomain < RuntimeError; end
     # needed for v2 spaces_controller
     class DBNameUniqueRaceError < Sequel::ValidationFailed; end
+
+    include NameCharsetValidator
 
     SPACE_NAME_REGEX = /\A[[:alnum:][:punct:][:print:]]+\Z/
     SELECT_NEWEST_PROCESS = lambda { |_, processes|
@@ -231,6 +234,7 @@ module VCAP::CloudController
       validates_presence :organization
       validates_unique %i[organization_id name]
       validates_format SPACE_NAME_REGEX, :name
+      validate_name_charset
 
       errors.add(:space_quota_definition, :invalid_organization) if space_quota_definition && space_quota_definition.organization_id != organization.id
 

@@ -1,8 +1,11 @@
+require 'models/helpers/name_charset_validator'
+
 module VCAP::CloudController
   class IsolationSegmentModel < Sequel::Model(:isolation_segments)
     SHARED_ISOLATION_SEGMENT_GUID = '933b4c58-120b-499a-b85d-4b6fc9e2903b'.freeze
 
     include Serializer
+    include NameCharsetValidator
 
     ISOLATION_SEGMENT_MODEL_REGEX = /\A[[:print:]]+\Z/
 
@@ -31,6 +34,7 @@ module VCAP::CloudController
 
     def validate
       validates_format ISOLATION_SEGMENT_MODEL_REGEX, :name, message: Sequel.lit('Isolation Segment names can only contain non-blank unicode characters')
+      validate_name_charset
 
       validates_unique [:name], message: Sequel.lit('Isolation Segment names are case insensitive and must be unique')
     end
