@@ -92,9 +92,9 @@ module VCAP::CloudController
           end
 
           update_processes(processes_to_ports_map)
-        end
 
-        route.reload
+          route.reload
+        end
 
         route
       end
