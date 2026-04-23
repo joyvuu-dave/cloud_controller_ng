@@ -3,7 +3,7 @@ require 'optparse'
 require 'cloud_controller/uaa/uaa_token_decoder'
 require 'cloud_controller/uaa/uaa_verification_keys'
 require 'app_log_emitter'
-require 'loggregator_emitter'
+require 'loggregator_emitter/client'
 require 'fluent_emitter'
 require 'cloud_controller/rack_app_builder'
 require 'cloud_controller/metrics/periodic_updater'
@@ -174,16 +174,21 @@ module VCAP::CloudController
     end
 
     def setup_app_log_emitter
+      VCAP::AppLogEmitter.logger = logger
       VCAP::AppLogEmitter.fluent_emitter = fluent_emitter if @config.get(:fluent)
 
-      if @config.get(:loggregator) && @config.get(
-        :loggregator, :router
-      )
-        VCAP::AppLogEmitter.emitter = LoggregatorEmitter::Emitter.new(@config.get(:loggregator, :router), 'cloud_controller', 'API',
-                                                                      @config.get(:index))
-      end
+      return unless @config.get(:loggregator) && @config.get(:loggregator, :endpoint)
 
-      VCAP::AppLogEmitter.logger = logger
+      VCAP::AppLogEmitter.emitter = LoggregatorEmitter::Client.new(
+        endpoint: @config.get(:loggregator, :endpoint),
+        origin: 'cloud_controller',
+        source_type: 'API',
+        instance_id: @config.get(:index),
+        ca_cert_file: @config.get(:loggregator, :ca_file),
+        client_cert_file: @config.get(:loggregator, :cert_file),
+        client_key_file: @config.get(:loggregator, :key_file),
+        subject_name: @config.get(:loggregator, :subject_name)
+      )
     end
 
     def fluent_emitter

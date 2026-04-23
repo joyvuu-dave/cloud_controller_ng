@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'loggregator_emitter/client'
 
 module VCAP
   RSpec.describe AppLogEmitter do
@@ -18,12 +19,12 @@ module VCAP
 
     describe 'when no emitter is set' do
       it 'does not emit errors' do
-        expect_any_instance_of(LoggregatorEmitter::Emitter).not_to receive(:emit_error)
+        expect_any_instance_of(LoggregatorEmitter::Client).not_to receive(:emit_error)
         AppLogEmitter.emit_error('app_id', 'error message')
       end
 
       it 'does not emit' do
-        expect_any_instance_of(LoggregatorEmitter::Emitter).not_to receive(:emit)
+        expect_any_instance_of(LoggregatorEmitter::Client).not_to receive(:emit)
         AppLogEmitter.emit('app_id', 'log message')
       end
     end
@@ -62,7 +63,7 @@ module VCAP
       let(:org) { VCAP::CloudController::Organization.make }
       let(:space) { VCAP::CloudController::Space.make(organization: org) }
       let(:app) { VCAP::CloudController::AppModel.make(space:) }
-      let(:emitter) { LoggregatorEmitter::Emitter.new('127.0.0.1:1234', 'cloud_controller', 'API', 1) }
+      let(:emitter) { instance_double(LoggregatorEmitter::Client) }
 
       before do
         AppLogEmitter.emitter = emitter

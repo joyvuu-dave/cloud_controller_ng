@@ -1,12 +1,8 @@
 require 'spec_helper'
-require 'securerandom'
 require 'tempfile'
 
 RSpec.describe 'Cloud controller Loggregator Integration', type: :integration do
   before(:all) do
-    @loggregator_server = FakeLoggregatorServer.new(12_345)
-    @loggregator_server.start
-
     @authed_headers = {
       'Authorization' => "bearer #{admin_token}",
       'Accept' => 'application/json',
@@ -18,12 +14,16 @@ RSpec.describe 'Cloud controller Loggregator Integration', type: :integration do
     config = VCAP::CloudController::YAMLConfig.safe_load_file(base_cc_config_file).deep_merge(
       VCAP::CloudController::YAMLConfig.safe_load_file(port_8181_overrides)
     )
+    config['loggregator'] = { 'endpoint' => 'localhost:12345' }
 
     @cc_config_file = Tempfile.new('cc_config.yml')
     @cc_config_file.write(YAML.dump(config))
     @cc_config_file.close
 
     start_cc(debug: false, config: @cc_config_file.path)
+
+    @loggregator_server = FakeLoggregatorServer.new(12_345)
+    @loggregator_server.start
 
     org = org_with_default_quota(@authed_headers)
     org_guid = org.json_body['metadata']['guid']
@@ -43,7 +43,7 @@ RSpec.describe 'Cloud controller Loggregator Integration', type: :integration do
     @loggregator_server.stop
   end
 
-  it 'send logs to the loggregator' do
+  it 'sends logs to the loggregator' do
     app = make_post_request('/v2/apps',
                             {
                               'name' => 'foo_app',
@@ -57,9 +57,9 @@ RSpec.describe 'Cloud controller Loggregator Integration', type: :integration do
     expect(messages.size).to eq(1)
 
     message = messages.first
-    expect(message.message).to eq "Created app with guid #{app_id}"
-    expect(message.app_id).to eq app_id
-    expect(message.source_type).to eq 'API'
-    expect(message.message_type).to eq LogMessage::MessageType::OUT
+    expect(message.source_id).to eq(app_id)
+    expect(message.log.type).to eq(:OUT)
+    expect(message.log.payload).to eq("Created app with guid #{app_id}")
+    expect(message.tags['source_type']).to eq('API')
   end
 end

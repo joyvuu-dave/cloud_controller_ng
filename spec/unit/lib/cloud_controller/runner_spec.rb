@@ -37,6 +37,11 @@ module VCAP::CloudController
       allow(Puma::Server).to receive(:new).and_return(puma_server_double)
     end
 
+    after do
+      VCAP::AppLogEmitter.instance_variable_set(:@emitter, nil)
+      VCAP::AppLogEmitter.instance_variable_set(:@logger, nil)
+    end
+
     subject do
       Runner.new(argv + ['-c', config_file.path])
     end
@@ -116,8 +121,8 @@ module VCAP::CloudController
       end
 
       it 'sets up loggregator emitter' do
-        loggregator_emitter = double(:loggregator_emitter)
-        expect(LoggregatorEmitter::Emitter).to receive(:new).and_return(loggregator_emitter)
+        loggregator_emitter = instance_double(LoggregatorEmitter::Client)
+        expect(LoggregatorEmitter::Client).to receive(:new).and_return(loggregator_emitter)
         expect(VCAP::AppLogEmitter).to receive(:emitter=).with(loggregator_emitter)
         subject
       end

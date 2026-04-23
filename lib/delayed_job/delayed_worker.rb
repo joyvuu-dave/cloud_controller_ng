@@ -3,6 +3,7 @@ require 'rack'
 require 'puma'
 require 'prometheus/middleware/exporter'
 require 'cloud_controller/standalone_metrics_webserver'
+require 'loggregator_emitter/client'
 
 class CloudController::DelayedWorker
   DEFAULT_READ_AHEAD_POSTGRES = 0
@@ -96,15 +97,21 @@ class CloudController::DelayedWorker
   end
 
   def setup_app_log_emitter(config, logger)
-    VCAP::AppLogEmitter.fluent_emitter = fluent_emitter(config) if config.get(:fluent)
-    if config.get(:loggregator) && config.get(
-      :loggregator, :router
-    )
-      VCAP::AppLogEmitter.emitter = LoggregatorEmitter::Emitter.new(config.get(:loggregator, :router), 'cloud_controller', 'API',
-                                                                    config.get(:index))
-    end
-
     VCAP::AppLogEmitter.logger = logger
+    VCAP::AppLogEmitter.fluent_emitter = fluent_emitter(config) if config.get(:fluent)
+
+    return unless config.get(:loggregator) && config.get(:loggregator, :endpoint)
+
+    VCAP::AppLogEmitter.emitter = LoggregatorEmitter::Client.new(
+      endpoint: config.get(:loggregator, :endpoint),
+      origin: 'cloud_controller',
+      source_type: 'API',
+      instance_id: config.get(:index),
+      ca_cert_file: config.get(:loggregator, :ca_file),
+      client_cert_file: config.get(:loggregator, :cert_file),
+      client_key_file: config.get(:loggregator, :key_file),
+      subject_name: config.get(:loggregator, :subject_name)
+    )
   end
 
   def fluent_emitter(config)
