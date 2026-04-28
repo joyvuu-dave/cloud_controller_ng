@@ -108,6 +108,54 @@ RSpec.describe Database::OldRecordCleanup do
       expect(VCAP::CloudController::AppUsageEvent.count).to eq(0)
     end
 
+    it 'keeps AppUsageEvent WAS_RUNNING record when there is no corresponding stop record' do
+      stale_was_running = VCAP::CloudController::AppUsageEvent.make(created_at: 2.days.ago, state: 'WAS_RUNNING', app_guid: 'guid1')
+
+      record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::AppUsageEvent, cutoff_age_in_days: 1, keep_at_least_one_record: false, keep_running_records: true)
+      record_cleanup.delete
+
+      expect(stale_was_running.reload).to be_present
+      expect(VCAP::CloudController::AppUsageEvent.count).to eq(1)
+    end
+
+    it 'deletes AppUsageEvent WAS_RUNNING record when there is a corresponding stop record' do
+      app_guid = 'stopped-app'
+      stale_was_running = VCAP::CloudController::AppUsageEvent.make(created_at: 5.days.ago, state: 'WAS_RUNNING', app_guid: app_guid)
+      stale_stop = VCAP::CloudController::AppUsageEvent.make(created_at: 4.days.ago, state: 'STOPPED', app_guid: app_guid)
+
+      record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::AppUsageEvent, cutoff_age_in_days: 1, keep_at_least_one_record: false, keep_running_records: true)
+      record_cleanup.delete
+
+      expect { stale_was_running.reload }.to raise_error(Sequel::NoExistingObject)
+      expect { stale_stop.reload }.to raise_error(Sequel::NoExistingObject)
+    end
+
+    it 'keeps both STARTED and WAS_RUNNING records for the same app while it is running' do
+      app_guid = 'running-app'
+      stale_started = VCAP::CloudController::AppUsageEvent.make(created_at: 10.days.ago, state: 'STARTED', app_guid: app_guid)
+      stale_was_running = VCAP::CloudController::AppUsageEvent.make(created_at: 5.days.ago, state: 'WAS_RUNNING', app_guid: app_guid)
+
+      record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::AppUsageEvent, cutoff_age_in_days: 1, keep_at_least_one_record: false, keep_running_records: true)
+      record_cleanup.delete
+
+      expect(stale_started.reload).to be_present
+      expect(stale_was_running.reload).to be_present
+    end
+
+    it 'deletes both STARTED and WAS_RUNNING records when a STOPPED record exists' do
+      app_guid = 'restarted-app'
+      stale_started = VCAP::CloudController::AppUsageEvent.make(created_at: 10.days.ago, state: 'STARTED', app_guid: app_guid)
+      stale_was_running = VCAP::CloudController::AppUsageEvent.make(created_at: 8.days.ago, state: 'WAS_RUNNING', app_guid: app_guid)
+      stale_stop = VCAP::CloudController::AppUsageEvent.make(created_at: 5.days.ago, state: 'STOPPED', app_guid: app_guid)
+
+      record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::AppUsageEvent, cutoff_age_in_days: 1, keep_at_least_one_record: false, keep_running_records: true)
+      record_cleanup.delete
+
+      expect { stale_started.reload }.to raise_error(Sequel::NoExistingObject)
+      expect { stale_was_running.reload }.to raise_error(Sequel::NoExistingObject)
+      expect { stale_stop.reload }.to raise_error(Sequel::NoExistingObject)
+    end
+
     # ==================== KEEP_RUNNING_RECORDS: ServiceUsageEvent ====================
 
     it 'keeps ServiceUsageEvent create record when there is no corresponding delete record' do
@@ -175,6 +223,40 @@ RSpec.describe Database::OldRecordCleanup do
       record_cleanup.delete
 
       expect { orphan_delete.reload }.to raise_error(Sequel::NoExistingObject)
+    end
+
+    it 'keeps ServiceUsageEvent WAS_RUNNING record when there is no corresponding delete record' do
+      stale_was_running = VCAP::CloudController::ServiceUsageEvent.make(created_at: 2.days.ago, state: 'WAS_RUNNING', service_instance_guid: 'guid1')
+
+      record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::ServiceUsageEvent, cutoff_age_in_days: 1, keep_at_least_one_record: false, keep_running_records: true)
+      record_cleanup.delete
+
+      expect(stale_was_running.reload).to be_present
+      expect(VCAP::CloudController::ServiceUsageEvent.count).to eq(1)
+    end
+
+    it 'deletes ServiceUsageEvent WAS_RUNNING record when there is a corresponding delete record' do
+      service_guid = 'deleted-instance'
+      stale_was_running = VCAP::CloudController::ServiceUsageEvent.make(created_at: 5.days.ago, state: 'WAS_RUNNING', service_instance_guid: service_guid)
+      stale_delete = VCAP::CloudController::ServiceUsageEvent.make(created_at: 4.days.ago, state: 'DELETED', service_instance_guid: service_guid)
+
+      record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::ServiceUsageEvent, cutoff_age_in_days: 1, keep_at_least_one_record: false, keep_running_records: true)
+      record_cleanup.delete
+
+      expect { stale_was_running.reload }.to raise_error(Sequel::NoExistingObject)
+      expect { stale_delete.reload }.to raise_error(Sequel::NoExistingObject)
+    end
+
+    it 'keeps both CREATED and WAS_RUNNING records for the same service instance while it exists' do
+      service_guid = 'running-service'
+      stale_created = VCAP::CloudController::ServiceUsageEvent.make(created_at: 10.days.ago, state: 'CREATED', service_instance_guid: service_guid)
+      stale_was_running = VCAP::CloudController::ServiceUsageEvent.make(created_at: 5.days.ago, state: 'WAS_RUNNING', service_instance_guid: service_guid)
+
+      record_cleanup = Database::OldRecordCleanup.new(VCAP::CloudController::ServiceUsageEvent, cutoff_age_in_days: 1, keep_at_least_one_record: false, keep_running_records: true)
+      record_cleanup.delete
+
+      expect(stale_created.reload).to be_present
+      expect(stale_was_running.reload).to be_present
     end
 
     # ==================== EDGE CASES & DATA INTEGRITY ====================

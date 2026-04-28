@@ -10,7 +10,8 @@ module VCAP::CloudController
 
     def self.usage_lifecycle
       {
-        beginning_state: Repositories::ServiceUsageEventRepository::CREATED_EVENT_STATE,
+        beginning_state: [Repositories::ServiceUsageEventRepository::CREATED_EVENT_STATE,
+                          Repositories::ServiceUsageEventRepository::WAS_RUNNING_EVENT_STATE],
         ending_state: Repositories::ServiceUsageEventRepository::DELETED_EVENT_STATE,
         guid_column: :service_instance_guid
       }.freeze

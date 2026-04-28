@@ -12,7 +12,7 @@ module VCAP::CloudController
 
     def self.usage_lifecycle
       {
-        beginning_state: ProcessModel::STARTED,
+        beginning_state: [ProcessModel::STARTED, Repositories::AppUsageEventRepository::WAS_RUNNING_STATE],
         ending_state: ProcessModel::STOPPED,
         guid_column: :app_guid
       }.freeze

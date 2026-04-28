@@ -60,8 +60,9 @@ module Database
 
       prunable_initial_records = initial_records.where(exists_condition)
 
-      # Include records with states other than START/STOP
-      other_records = old_records.exclude(state: [beginning_state, ending_state])
+      # Include records with states other than START/STOP. beginning_state may be a
+      # scalar or an array; flatten so the exclude clause produces a flat list of states.
+      other_records = old_records.exclude(state: Array(beginning_state) + [ending_state])
 
       # Return the UNION of:
       # 1. START records that have a matching STOP (safe to delete)
