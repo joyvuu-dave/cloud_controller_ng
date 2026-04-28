@@ -30,3 +30,13 @@ Name | Type | Description
 **instance_count.current** | _integer_ or `null` | Current instance count of the app that this event pertains to, if applicable
 **instance_count.previous** | _integer_ or `null` | Previous instance count of the app that this event pertains to, if applicable
 **links** | [_links object_](#links) | Links to related resources
+
+#### WAS_RUNNING events
+
+`WAS_RUNNING` is a synthetic value for `state.current` recorded once per running process by a one-time data migration when the keep-running cleanup feature was introduced. It marks every process that was already running at the time of the upgrade so that billing consumers can bootstrap from a complete baseline of running apps even if the original `STARTED` events have been pruned.
+
+**Consumer interpretation:**
+
+* If you have not previously recorded a `STARTED` event for this resource, treat `WAS_RUNNING` as equivalent to `STARTED`.
+* If you have already recorded `STARTED` (or an earlier `WAS_RUNNING`) for this resource, treat as a redundant baseline confirmation and ignore.
+* `state.previous` on a `WAS_RUNNING` event is always `null`. Subsequent real events for the same resource will continue to report their actual prior process state in `state.previous` (typically `STARTED`). If you perform chain validation, treat `WAS_RUNNING` as equivalent to `STARTED` for the purpose of validating the next event's `state.previous`.
