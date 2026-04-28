@@ -4,6 +4,8 @@ require 'cloud_controller/url_secret_obfuscator'
 module VCAP::CloudController
   module Repositories
     class AppUsageEventRepository
+      WAS_RUNNING_STATE = 'WAS_RUNNING'.freeze
+
       def find(guid)
         AppUsageEvent.find(guid:)
       end

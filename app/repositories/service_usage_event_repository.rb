@@ -7,6 +7,7 @@ module VCAP::CloudController
       DELETED_EVENT_STATE = 'DELETED'.freeze
       CREATED_EVENT_STATE = 'CREATED'.freeze
       UPDATED_EVENT_STATE = 'UPDATED'.freeze
+      WAS_RUNNING_EVENT_STATE = 'WAS_RUNNING'.freeze
 
       def find(guid)
         ServiceUsageEvent.find(guid:)
